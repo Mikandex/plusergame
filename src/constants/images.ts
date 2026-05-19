@@ -1,0 +1,21 @@
+import apple from "../../assets/images/apple.png";
+import google from "../../assets/images/google.png";
+import logo from "../../assets/images/logo.png";
+import product1 from "../../assets/images/product-img-1.jpg";
+import product2 from "../../assets/images/product-img-2.jpg";
+import product3 from "../../assets/images/product-img-3.jpg";
+import product4 from "../../assets/images/product-img-4.jpg";
+import product5 from "../../assets/images/product-img-5.jpg";
+import product6 from "../../assets/images/product-img-6.jpg";
+
+export default {
+  logo,
+  apple,
+  google,
+  product1,
+  product2,
+  product3,
+  product4,
+  product5,
+  product6
+};
