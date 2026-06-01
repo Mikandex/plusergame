@@ -3,8 +3,11 @@ import { useFonts } from 'expo-font';
 import { Stack } from "expo-router";
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import ToastManager from 'toastify-react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import '../global.css';
+import { ToastProvider } from 'react-native-toast-notifications';
+import { AntDesign, Ionicons, Octicons } from '@expo/vector-icons';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,15 +40,26 @@ export default function RootLayout() {
   }
   
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-      </Stack>
-
-      <ToastManager theme={"light"} 
-        // backgroundColor={scheme === 'dark' ? '#1F2937' : '#FFFFFF'}
-        // textStyle={{ color: scheme === 'dark' ? '#E5E7EB' : '#111827' }}
-      />
-    </>
+    <GestureHandlerRootView className='flex-1'>
+      <BottomSheetModalProvider>
+        <ToastProvider
+          placement="top"
+          animationType='slide-in'
+          successColor="#FFE1CC"
+          dangerColor="#FFE1CC"
+          warningColor="#FFE1CC"
+          normalColor="#FFE1CC"
+          textStyle={{ color: "#000" }}
+          offset={70}
+          successIcon={<Octicons name="check-circle-fill" size={16} color="#000" />}
+          dangerIcon={<Ionicons name="close-circle-sharp" size={16} color="#000" />}
+          warningIcon={<Ionicons name="warning" size={16} color="#000" />}
+        >
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+          </Stack>
+        </ToastProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   )
 }

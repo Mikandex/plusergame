@@ -24,7 +24,7 @@ const CustomButton = ({ title, handlePress, containerStyles, bgColor, textStyles
         ? <FontAwesome5 name="circle-notch" size={20} color="white" className="animate-spin-fast" />
         : (
           <View className="flex-row items-center gap-2">
-            <Text className={`font-msbold text-lg ${textStyles}`}>{title}</Text>
+            <Text className={`font-msbold text-base ${textStyles}`}>{title}</Text>
             {icon && icon}
           </View>
         )

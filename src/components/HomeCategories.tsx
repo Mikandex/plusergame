@@ -50,7 +50,7 @@ const HomeCategories = () => {
         contentContainerStyle={{ gap: 4, paddingHorizontal: 10 }}
         keyExtractor={(item, index) => index.toString()}
         renderItem={({ item }) => (
-          <Pressable className='p-2 items-center max-w-28'>
+          <Pressable className='p-2 items-center max-w-28' onPress={() => router.push("/(modal)/CategoriesProducts")}>
             <View className='w-20 h-20 rounded-full overflow-hidden'>
               <ExpoImage 
                 source={item?.img} 

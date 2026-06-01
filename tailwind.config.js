@@ -13,13 +13,15 @@ module.exports = {
           red: {
             DEFAULT: "#eb4d4b"
           },
+          cyan: {
+            DEFAULT: "#00ced1",
+            light: "#afeeee"
+          },
           blue: {
             dark: "#130f40"
           },
           gray: {
             DEFAULT: "#E7E7E7",
-            tab: "#F5F5F5",
-            button: "#E5E5E5"
           }
         },
         fontFamily: {

@@ -32,7 +32,7 @@ const FeaturedProduct = () => {
 
 
     const renderDeal = ({ item }: any) => (
-        <Pressable className='w-40 gap-1' onPress={() => router.push({pathname: "/(protected)/(routes)/NaijaShopProductDetails", params: { productDetails: JSON.stringify(item) }})}>
+        <Pressable className='w-40 gap-1' onPress={() => router.push({pathname: "/(routes)/ProductDetails", params: { productDetails: JSON.stringify(item) }})}>
             <View className="bg-gray-50 size-40 rounded-xl items-center justify-center">
                 <ExpoImage source={{ uri: item?.image[0] }} placeholder={{ blurhash }} cachePolicy="disk" contentFit="cover" style={{width: "100%", height: "100%" }}/>
             </View>

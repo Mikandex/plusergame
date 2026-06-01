@@ -17,6 +17,7 @@ import FeaturedProduct from '@/components/FeaturedProduct'
 import HomeCategories from '@/components/HomeCategories'
 import HomeProductList from '@/components/HomeProductList'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import HomeSearchBar from '@/components/search/HomeSearchBar'
 const { width: W } = Dimensions.get('window')
 
 const BG_H = 170   // height of the sunburst area — keeps rays compact at top
@@ -98,34 +99,6 @@ function DiagonalBackground() {
   )
 }
 
-function SearchBar() {
-  return (
-    <View className="flex-row items-center gap-x-2.5 mb-2 px-3">
-      <TouchableOpacity className="w-10 h-10 rounded-full bg-white items-center justify-center shadow">
-        <Text className="text-lg">⊞</Text>
-      </TouchableOpacity>
-
-      <View className="flex-1 flex-row items-center bg-white rounded-full px-3 h-10 shadow">
-        <Text className="text-sm mr-1.5">🔍</Text>
-        <TextInput
-          className="flex-1 text-sm text-gray-800"
-          placeholder="Search"
-          placeholderTextColor="#bbb"
-        />
-        <Text className="text-base">📷</Text>
-      </View>
-
-      <TouchableOpacity className="w-10 h-10 rounded-xl bg-white items-center justify-center shadow">
-        <Text className="text-lg">🛒</Text>
-        <View className="absolute top-1 right-1 w-4 h-4 rounded-full items-center justify-center"
-          style={{ backgroundColor: '#eb4d4b' }}>
-          <Text className="text-white text-[9px] font-bold">4</Text>
-        </View>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
 export default function HomeScreen() {
 
   const top = useSafeAreaInsets().top
@@ -146,11 +119,10 @@ export default function HomeScreen() {
         <FlatList
           data={[]}
           renderItem={null}
-          
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={() => (
             <View>
-              <SearchBar/>
+              <HomeSearchBar/>
               <HomeBanner/>
               <HomeCategories />
               <FeaturedProduct />

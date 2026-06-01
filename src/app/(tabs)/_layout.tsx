@@ -1,5 +1,5 @@
 import { Feather, FontAwesome, FontAwesome5, Fontisto, Ionicons, MaterialCommunityIcons, MaterialIcons, Octicons, SimpleLineIcons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -85,7 +85,14 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="Home" options={{ title: "Home" }} />
       <Tabs.Screen name="Search" options={{ title: "Search" }} />
-      <Tabs.Screen name="Cart" options={{ title: "Cart", tabBarBadge: 2 }} />
+      <Tabs.Screen name="Cart" options={{ title: "Cart", tabBarBadge: 2 }}
+        listeners={() => ({
+          tabPress: (e) => {
+            e.preventDefault()
+            router.push("/(routes)/Cart")
+          }
+        })}
+      />
       <Tabs.Screen name="Orders" options={{ title: "Orders" }} />
       <Tabs.Screen name="Profile" options={{ title: "Profile" }} />
     </Tabs>
