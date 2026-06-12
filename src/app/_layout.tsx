@@ -1,13 +1,11 @@
-import { useThemeStore } from '@/store/ThemeStore';
 import { useFonts } from 'expo-font';
 import { Stack } from "expo-router";
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import '../global.css';
-import { ToastProvider } from 'react-native-toast-notifications';
-import { AntDesign, Ionicons, Octicons } from '@expo/vector-icons';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -23,12 +21,6 @@ export default function RootLayout() {
     "Montserrat-Thin": require("../../assets/fonts/Montserrat-Thin.ttf"),
   });
 
-  const { initializeTheme, theme } = useThemeStore();
-
-  useEffect(() => {
-    initializeTheme();
-  }, []);
-
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
@@ -42,23 +34,67 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView className='flex-1'>
       <BottomSheetModalProvider>
-        <ToastProvider
-          placement="top"
-          animationType='slide-in'
-          successColor="#FFE1CC"
-          dangerColor="#FFE1CC"
-          warningColor="#FFE1CC"
-          normalColor="#FFE1CC"
-          textStyle={{ color: "#000" }}
-          offset={70}
-          successIcon={<Octicons name="check-circle-fill" size={16} color="#000" />}
-          dangerIcon={<Ionicons name="close-circle-sharp" size={16} color="#000" />}
-          warningIcon={<Ionicons name="warning" size={16} color="#000" />}
-        >
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-          </Stack>
-        </ToastProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+        </Stack>
+        <Toast
+        config={{
+          success: (props) => (
+            <BaseToast
+              {...props}
+              text1NumberOfLines={2}
+              text2NumberOfLines={2}
+              style={{ 
+                backgroundColor: 'white',
+                borderLeftColor: 'green',
+                zIndex: 9999,
+                minHeight: 55,
+                height: 'auto',
+                paddingVertical: 10,
+              }}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+              text1Style={{ fontSize: 15, fontWeight: 'bold', color: 'black' }}
+              text2Style={{ fontSize: 13, color: 'black' }}
+            />
+          ),
+          error: (props: any) => (
+            <ErrorToast
+              {...props}
+              text1NumberOfLines={2}
+              text2NumberOfLines={2}
+              style={{ 
+                backgroundColor: 'white',
+                borderLeftColor: '#EF4734',
+                zIndex: 9999,
+                minHeight: 55,
+                height: 'auto',
+                paddingVertical: 10,
+              }}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+              text1Style={{ fontSize: 15, fontWeight: 'bold', color: 'black' }}
+              text2Style={{ fontSize: 13, color: 'black' }}
+            />
+          ),
+          info: (props: any) => (
+            <BaseToast
+              {...props}
+              text1NumberOfLines={2}
+              text2NumberOfLines={2}
+              style={{ 
+                backgroundColor: 'white',
+                borderLeftColor: '#EF4734',
+                zIndex: 9999,
+                minHeight: 55,
+                height: 'auto',
+                paddingVertical: 10,
+              }}
+              contentContainerStyle={{ paddingHorizontal: 15}}
+              text1Style={{ fontSize: 15, fontWeight: 'bold', color: 'black' }}
+              text2Style={{ fontSize: 13, color: 'black' }}
+            />
+          ),
+        }}
+      />
       </BottomSheetModalProvider>
     </GestureHandlerRootView>
   )

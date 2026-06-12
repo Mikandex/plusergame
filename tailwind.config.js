@@ -11,17 +11,21 @@ module.exports = {
       extend: {
         colors: {
           red: {
-            DEFAULT: "#eb4d4b"
+            DEFAULT: "#9A2121"
           },
-          cyan: {
-            DEFAULT: "#00ced1",
-            light: "#afeeee"
+          yellow: {
+            DEFAULT: "#D4AF37"
           },
-          blue: {
-            dark: "#130f40"
+          charcoal: {
+            DEFAULT: "#0F1115",
+            light: "#1B1F27"
           },
           gray: {
-            DEFAULT: "#E7E7E7",
+            DEFAULT: "#9CA3AF",
+            light: "#F5F7FA",
+          },
+          green: {
+            DEFAULT: "#22C55E"
           }
         },
         fontFamily: {

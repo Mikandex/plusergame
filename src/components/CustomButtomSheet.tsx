@@ -39,6 +39,11 @@ const CustomButtomSheet = forwardRef<Ref, Props>((props, ref) => {
         backdropComponent={renderBackdrop}
         enableDynamicSizing={props.dynamicSizing === undefined ? true : props.dynamicSizing}
         onDismiss={props.onDismiss}
+        backgroundStyle={{
+            borderTopLeftRadius: 25,
+            borderTopRightRadius: 25,
+            backgroundColor: "#1B1F27"
+        }}
         style={{
             shadowColor: '#000', // Example shadow color
             shadowOffset: { width: 0, height: 2 }, // Example shadow offset
@@ -71,3 +76,4 @@ const CustomButtomSheet = forwardRef<Ref, Props>((props, ref) => {
 })
 
 export default CustomButtomSheet
+

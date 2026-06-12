@@ -1,63 +1,73 @@
-import { View, Text, Image, ScrollView } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Dimensions } from 'react-native'
-import { StatusBar } from 'expo-status-bar';
-import WhiteButton from '@/components/WhiteButton';
+import Header from '@/components/Header';
 import { images } from '@/constants';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import Fontisto from '@expo/vector-icons/Fontisto';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import Entypo from '@expo/vector-icons/Entypo';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { FontAwesome5, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Constants from 'expo-constants';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import SpaceBetween from '@/components/SpaceBetween';
+import { StatusBar } from 'expo-status-bar';
+import React from 'react';
+import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
 
-const height = Dimensions.get('window').height;
+const menuItems = [
+  { label: 'Edit Profile', icon: <Ionicons name="person-outline" size={22} color="#9CA3AF" />, onPress: () => { router.push("/(tabs)/profile/EditProfile") } },
+  { label: 'Change Pin', icon: <MaterialCommunityIcons name="shield-lock-outline" size={22} color="#9CA3AF" />, onPress: () => { router.push("/(protected)/(routes)/ChangePin") } },
+  { label: 'Transactions', icon: <MaterialCommunityIcons name="bank-outline" size={22} color="#9CA3AF" />, onPress: () => router.push('/(tabs)/Transactions') },
+  { label: 'Support', icon: <Ionicons name="headset-outline" size={22} color="#9CA3AF" />, onPress: () => router.push("/(tabs)/profile/Support") },
+  { label: 'Logout', icon: <MaterialIcons name="logout" size={22} color="#ef4444" />, onPress: () => { router.replace("/(onboarding)/LogIn") }, danger: true },
+];
 
 export default function ProfileScreen() {
-    
-  const { top } = useSafeAreaInsets()
 
   return (
-    <View className="h-full bg-white">
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View>
-          <View  style={{ paddingTop: top }} className={`w-full ${height >= 640 ? "h-52" : "h-44"} bg-blue-dark px-4 relative`}>
-            <View className='flex-row items-center justify-end mt-4 pb-4'>
-              <WhiteButton title='Sign Out' containerStyles='bg-red/20 border-red' loadingColor="#ef4444" loadingText='Logging Out' textStyles='text-red'/>
-            </View>
-            <View className='flex-row gap-4 items-start absolute -bottom-10 left-4'>
-              <View className='size-[100px] rounded-full border border-gray-100 z-10 bg-blue-dark'>
-                <Image source={images.user} resizeMode='cover' className='w-full h-full rounded-full overflow-hidden'/>
-              </View>
-              <View className='flex-1'>
-                <View className='flex-row items-center gap-1 pr-4'>
-                  <Text className="text-sm text-white font-mmedium" numberOfLines={1}>Ojiego Franklin</Text>
-                  <MaterialIcons name="verified" size={16} color="#eb4d4b" />
-                </View>
-                <Text className="text-sm text-white font-mregular" numberOfLines={1}>franklinojiego1@gmail.com</Text>
-              </View>
-            </View>
+    <View className='flex-1 bg-charcoal'>
+      <Header title="Profile" showBack={false} onpress={() => router.back()} />
+      <StatusBar style="light" />
+
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        className="px-4 flex-1"
+        keyboardShouldPersistTaps="handled"
+      >
+
+        {/* User Info */}
+        <View className='flex-row items-center gap-4 mb-6 mt-4'>
+          <View className='p-1 rounded-full border-2 border-yellow bg-charcoal'>
+            <Image
+              source={images.avatar}
+              className='w-20 h-20 rounded-full'
+            />
+          </View>
+          <View className='flex-1'>
+            <Text className='text-white text-xl font-msbold'>John Doe</Text>
+            <Text className='text-gray-400 text-sm font-mmedium'>+2349056846256</Text>
           </View>
         </View>
 
-        <View className='pt-12 pb-7 px-4'>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/UserProfile")} title='User Profile' desc='Manage your personal details and preferences.' descStyle='text-[9px]' lefticon={<FontAwesome name="user" color={"#eb4d4b"} size={20}/>}/>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/Orders")} title='Orders' desc='Check your orders and its status.' descStyle='text-[9px]' lefticon={<MaterialCommunityIcons name="shopping" size={20} color={"#eb4d4b"} />}/>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/Security")} title='Security' desc='Protect your account with security features.' descStyle='text-[9px]' lefticon={<Fontisto name="locked" size={17} color={"#eb4d4b"} />}/>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/Refer")} title='Refer and Earn' desc='Invite friends, earn rewards!' descStyle='text-[9px]' lefticon={<FontAwesome6 name="gift" size={16} color={"#eb4d4b"} />}/>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/About")} title='About Navo' desc='Get help and find answers to your questions.' descStyle='text-[9px]' lefticon={<Entypo name="info" size={18} color={"#eb4d4b"} />}/>
-          <SpaceBetween onpress={() => router.push("/(protected)/(routes)/Support")} title='Support' desc='Get help and find answers to your questions.' descStyle='text-[9px]' lefticon={<FontAwesome5 name="headphones" size={18} color={"#eb4d4b"} />}/>
+        {/* Menu Card */}
+        <View className='bg-charcoal-light rounded-2xl px-4 py-2'>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.label}
+              onPress={item.onPress}
+              className={`flex-row items-center gap-4 py-4 ${index !== menuItems.length - 1 ? 'border-b border-charcoal' : ''}`}
+            >
+              {item.icon}
+              <Text className={`text-base font-mmedium ${item.danger ? 'text-red-500' : 'text-white'}`}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
 
-          <Text className="text-base text-gray-500 font-amedium mt-5">V {Constants.expoConfig?.version ?? '1.0.0'}</Text>
+          {/* Footer Text */}
+          <Text className='text-gray-400 text-xs mt-3 mb-1'>
+            Read the{' '}
+            <Text className='underline'>Privacy Policy</Text>,{' '}
+            <Text className='underline'>Terms of Service</Text>{' '}
+            and{' '}
+            <Text className='underline'>Game Policy</Text>{' '}
+            to for Responsible Gaming Activities.
+          </Text>
         </View>
-      </ScrollView>
 
-      <StatusBar style='light'/>
+      </ScrollView>
     </View>
-  )
+  );
 }

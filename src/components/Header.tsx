@@ -1,29 +1,26 @@
 import { View, Text, TouchableOpacity } from 'react-native'
-import React, { ReactElement } from 'react'
-import AntDesign from '@expo/vector-icons/AntDesign'
-import { Ionicons } from '@expo/vector-icons';
+import React from 'react'
+import { Octicons } from '@expo/vector-icons'
+import { router } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type headerProps = {
-    title: string;
-    right?: ReactElement, 
-    showGoBack?: boolean;
-    showRight?: boolean;
-    icon?: any;
-    onpress?: () => void
-}
+export default function Header({ title, showBack = true, onpress }: { title: string; showBack?: boolean; onpress: () => void }) {
 
-export default function Header({title, right, showGoBack, showRight, icon, onpress}: headerProps) {
+    const top = useSafeAreaInsets().top;
+    
   return (
-    <View className='flex-row items-center justify-between mt-4 pb-4 gap-1'>
-      {showGoBack ? <TouchableOpacity onPress={onpress}><Ionicons name="chevron-back-circle-sharp" size={33} color="#C3C3C3" /></TouchableOpacity>
-        : <Text/>
-      }
-      <Text className="flex-1 text-lg font-mmedium text-center" numberOfLines={1}>{title}</Text>
-      {showRight ? (
-        icon
-      ) : (
+    <View className="bg-charcoal flex-row justify-between gap-2 px-4 pb-4 relative"  style={{ paddingTop: top + 8 }}>
+        {showBack ? (
+            <TouchableOpacity onPress={onpress}>
+                <Octicons name="arrow-left" size={28} color="#fff" />
+            </TouchableOpacity>
+        ) : (
+            <View className='w-7'/>
+        )}
+        <Text className="text-white text-center text-lg font-msbold tracking-wide">
+            {title}
+        </Text>
         <View className='w-7'/>
-      )}
     </View>
   )
 }

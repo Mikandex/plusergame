@@ -1,28 +1,30 @@
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import React, { useCallback, memo } from 'react';
-import { useSharedValue } from 'react-native-reanimated';
+import { interpolate, useSharedValue } from 'react-native-reanimated';
 import Carousel, { Pagination } from 'react-native-reanimated-carousel';
+import { images } from '@/constants';
 
 const { width } = Dimensions.get('window');
 
-// Image URLs
-const defaultDataWith6Colors = [
-  "https://res.cloudinary.com/frankzeal/image/upload/v1760049343/UPTO_30_OFF_eatwr7.png",
-  "https://res.cloudinary.com/frankzeal/image/upload/v1760049344/UPTO_20_OFF_wb1gji.png"
-];
+const sliderImages = [images.card1, images.card2, images.card3];
 
-// Memoized Carousel Item
 type CarouselItemProps = {
-  uri: string
+  source: string | number  // number for local, string for remote
 };
 
-const CarouselItem = memo(({ uri }: CarouselItemProps) => {
+const CarouselItem = memo(({ source }: CarouselItemProps) => {
   const blurhash = 'L~I64noffQfQfQfQfQfQfQfQfQfQ';
     
   return (
-    <View style={styles.itemContainer}>
-      <ExpoImage source={{ uri }} placeholder={{ blurhash }} cachePolicy="disk" contentFit="cover" style={{ width: "100%", height: "100%" }}/>
+    <View style={styles.itemContainer} className='bg-charcoal'>
+      <ExpoImage
+        source={typeof source === 'number' ? source : { uri: source }}
+        placeholder={{ blurhash }}
+        cachePolicy="disk"
+        contentFit="cover"
+        style={{ width: "100%", height: "100%" }}
+      />
     </View>
   );
 });
@@ -34,29 +36,38 @@ const HomeBanner = () => {
 
   // Memoized renderItem for Carousel
   const renderCarouselItem = useCallback(
-    ({ item, index }: { item: string; index: number }) => (
-      <CarouselItem uri={item} key={index} />
+    ({ item, index }: { item: string | number; index: number }) => (
+      <CarouselItem source={item} key={index} />  // source, not uri
     ),
     []
   );
 
   return (
-    <View style={{ alignItems: 'center'}} className='my-4'>
+    <View style={{ alignItems: 'center'}}>
       <Carousel
         loop
-        width={width - 20 }
-        height={190}
-        style={{ borderRadius: 16, backgroundColor: "#f9fafb" }}
-        snapEnabled
+        width={width - 32}
+        height={120}
+        style={{ borderRadius: 16, borderWidth: 1, borderColor: "#D4AF37" }}
         autoPlay
         autoPlayInterval={4000}
-        pagingEnabled
-        data={defaultDataWith6Colors}
+        data={sliderImages}
         defaultScrollOffsetValue={scrollOffsetValue}
-        mode="horizontal-stack"
-        modeConfig={{
-          snapDirection: 'left',
-          stackInterval: 0,
+        customAnimation={(value) => {
+          'worklet';
+          const opacity = interpolate(value, [-1, 0, 1], [0, 1, 0], 'clamp');
+          const zIndex = interpolate(value, [-1, 0, 1], [0, 1, 0], 'clamp');
+          return {
+            opacity,
+            zIndex,
+            transform: [],
+          };
+        }}
+        withAnimation={{
+          type: 'timing',
+          config: {
+            duration: 800,
+          },
         }}
         onConfigurePanGesture={(panGesture) => {
           panGesture.activeOffsetX([-10, 10]);
@@ -72,7 +83,7 @@ const HomeBanner = () => {
       <View style={styles.paginationContainer}>
         <Pagination.Basic
           progress={progress}
-          data={defaultDataWith6Colors}
+          data={sliderImages}
           dotStyle={styles.dot}
           activeDotStyle={styles.activeDot}
         />
@@ -101,9 +112,9 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F7FA',
   },
   activeDot: {
-    backgroundColor: '#000',
+    backgroundColor: '#D4AF37',
   },
 });

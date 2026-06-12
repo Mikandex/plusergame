@@ -6,10 +6,8 @@ interface UserProfile {
   email:  string;
   fullName:  string;
   profilePicture:  string;
-  userName: string;
   kycVerified: boolean;
   gender:  string;
-  isProfileCreated: boolean;
   dateOfBirth: string;
   isEmailVerified: boolean;
 }
@@ -27,11 +25,9 @@ const defaultUserProfile: UserProfile = {
   countryOfResidence: "",
   email: "",
   fullName: "",
-  userName: "",
   profilePicture: "",
   kycVerified: false,
   gender: "",
-  isProfileCreated: false,
   dateOfBirth: "",
   isEmailVerified: false
 };

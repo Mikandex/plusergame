@@ -1,5 +1,5 @@
-import icons from "./icons";
 import images from "./images";
 import data from "./data";
+import sounds from "./sounds";
 
-export { icons, images, data };
+export { images, data, sounds };

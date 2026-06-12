@@ -1,4 +1,5 @@
-import { Feather, FontAwesome, FontAwesome5, Fontisto, Ionicons, MaterialCommunityIcons, MaterialIcons, Octicons, SimpleLineIcons } from "@expo/vector-icons";
+import { useAuthStore } from "@/store/AuthStore";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, Tabs } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function TabLayout() {
 
   const insets = useSafeAreaInsets();
+  const { isAuthenticated } = useAuthStore();
 
   return (
     <Tabs
@@ -14,45 +16,35 @@ export default function TabLayout() {
         tabBarIcon: ({ focused, color, size }) => {
           if (route.name === "Home") {
             return (
-              <SimpleLineIcons
-                name="home"
+              <Ionicons
+                name="home-outline"
                 size={size}
                 color={color}
               />
             );
           }
 
-          if (route.name === "Search") {
+          if (route.name === "GamesPlayed") {
             return (
               <Ionicons
-                name="search-outline"
+                name="game-controller-outline"
                 size={size}
                 color={color}
               />
             );
           }
 
-          if (route.name === "Cart") {
+          if (route.name === "Transactions") {
             return (
-              <Ionicons 
-                name="cart-outline"
+              <MaterialCommunityIcons
+                name="bank-outline"
                 size={size}
                 color={color}
               />
             );
           }
 
-          if (route.name === "Orders") {
-            return (
-              <Ionicons 
-                name="bag-handle-outline"
-                size={size}
-                color={color}
-              />
-            );
-          }
-
-          if (route.name === "Profile") {
+          if (route.name === "profile") {
             return (
               <Ionicons
                 name="person-outline"
@@ -64,37 +56,53 @@ export default function TabLayout() {
 
           return <Ionicons name="ellipse-outline" size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#eb4d4b',
-        tabBarInactiveTintColor: "gray",
+        tabBarActiveTintColor: '#9A2121',
+        tabBarInactiveTintColor: "#9CA3AF",
         tabBarShowLabel: true,
         tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopColor: "#DDDDDD",
-          borderTopWidth: 1,
+          backgroundColor: "#1B1F27",
+          borderTopWidth: 0,
+          borderTopColor: "transparent",
           paddingTop: 2,
           height: 55 + insets.bottom,
           paddingBottom: insets.bottom,
           position: "relative",
           elevation: 0,
-        },
-        tabBarBadgeStyle: {
-          backgroundColor: "#eb4d4b",
-          color: "#fff"
         }
       })}
     >
       <Tabs.Screen name="Home" options={{ title: "Home" }} />
-      <Tabs.Screen name="Search" options={{ title: "Search" }} />
-      <Tabs.Screen name="Cart" options={{ title: "Cart", tabBarBadge: 2 }}
+      <Tabs.Screen name="GamesPlayed" options={{ title: "Games Played" }} 
         listeners={() => ({
           tabPress: (e) => {
-            e.preventDefault()
-            router.push("/(routes)/Cart")
+            if (!isAuthenticated) {
+              e.preventDefault();
+              router.push('/(onboarding)/Index');
+            }
           }
         })}
       />
-      <Tabs.Screen name="Orders" options={{ title: "Orders" }} />
-      <Tabs.Screen name="Profile" options={{ title: "Profile" }} />
+      <Tabs.Screen name="Transactions" options={{ title: "Transactions" }} 
+        listeners={() => ({
+          tabPress: (e) => {
+            if (!isAuthenticated) {
+              e.preventDefault();
+              router.push('/(onboarding)/Index');
+            }
+          }
+        })}
+      />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} 
+        listeners={() => ({
+          tabPress: (e) => {
+            if (!isAuthenticated) {
+              e.preventDefault();
+              router.push('/(onboarding)/Index');
+            }
+          }
+        })}
+      />
+      
     </Tabs>
   );
 }

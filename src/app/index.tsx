@@ -1,4 +1,5 @@
 // import { images } from "@/constants";
+import images from "@/constants/images";
 import { useAuthStore } from "@/store/AuthStore";
 import { useProfileStore } from "@/store/ProfileStore";
 import useWalletStore from "@/store/WalletStore";
@@ -7,7 +8,7 @@ import { Redirect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 export default function App() {
 
@@ -48,21 +49,20 @@ useEffect(() => {
 
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-blue">
+      <View className="flex-1 justify-center items-center bg-black">
         <StatusBar style="light" />
         <View className="items-center justify-center">
-          {/* <Image
-            source={images.chatBot}
+          <Image
+            source={images.logo}
             style={styles.logo}
             resizeMode="contain"
-          /> */}
-          {/* <Text className="text-white font-mbold text-3xl mt-1">Buzzycash</Text> */}
+          />
         </View>
       </View>
     );
   }
 
-  return <Redirect href={isAuthenticated ? "/(tabs)/Home" : "/(auth)"} />;
+  return <Redirect href={isAuthenticated ? "/(tabs)/Home" : "/Splash"} />;
 }
 
 const styles = StyleSheet.create({

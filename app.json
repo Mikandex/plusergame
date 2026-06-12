@@ -1,25 +1,27 @@
 {
   "expo": {
-    "name": "Zeal Clothing",
-    "slug": "zeal-clothing",
+    "name": "Pluser Game",
+    "slug": "pluser-game",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "zealclothing",
+    "scheme": "plusergame",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.frankzeal33.zealclothing"
+      "bundleIdentifier": "com.loxfordnavoplus.plusergame",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0F1115",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundImage": "./assets/images/adaptive-icon.png",
+        "monochromeImage": "./assets/images/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.frankzeal33.zealclothing"
+      "package": "com.loxfordnavoplus.plusergame"
     },
     "web": {
       "output": "static",
@@ -30,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0F1115",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
@@ -39,16 +41,23 @@
       ],
       "expo-secure-store",
       "expo-font",
-       [
+      [
         "expo-image",
         {
           "disableLibdav1d": true
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b0e42a30-53e4-4ccb-b4d2-fff6b65f1e33"
+      }
     }
   }
 }
