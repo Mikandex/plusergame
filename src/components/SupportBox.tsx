@@ -1,10 +1,7 @@
 import { View, Text, Image, ImageSourcePropType } from 'react-native'
 import React from 'react'
-import { useThemeStore } from '@/store/ThemeStore';
 
 const SupportBox = ({image, label, value}: {image: ImageSourcePropType, label: string; value?: string}) => {
-
-  const { theme } = useThemeStore();
 
   return (
     <View className='w-full h-24 gap-4 rounded-xl flex-row px-4 items-center bg-charcoal-light'>

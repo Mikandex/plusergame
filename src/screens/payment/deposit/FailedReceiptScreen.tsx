@@ -204,7 +204,7 @@ export default function FailedReceiptScreen() {
       >
         <CustomButton
           title="Return to Homepage"
-          handlePress={() => router.replace("/(tabs)/Home")}
+          handlePress={() => router.replace("/(tabs)/home")}
           containerStyles="w-full border border-yellow"
           bgColor="transparent"
           textStyles="text-yellow"

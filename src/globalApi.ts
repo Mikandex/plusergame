@@ -44,6 +44,7 @@ const UNAUTHORIZED_MESSAGES = new Set([
   'Invalid or expired token',
   'Please provide a valid authorization token.',
   'Your session is not valid for this resource.',
+  'Your session has expired. Please log in again.'
 ]);
 
 const isUnauthorizedError = (error: any): boolean => {

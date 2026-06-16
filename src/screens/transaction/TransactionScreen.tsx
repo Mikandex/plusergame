@@ -16,107 +16,6 @@ import { axiosClient } from '../../globalApi'
 
 const PAGE_SIZE = 20;
 
-export const staticTransactions: transactionsType[] = [
-  {
-    amount: 5000,
-    category: "deposit",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "1",
-    paid_at: "2024-01-15T10:30:00Z",
-    payment_method: "bank_transfer",
-    payment_status: "successful",
-    payment_type: "wallet",
-    reference: "REF-001",
-    transaction_reference: "TXN-20240115-001",
-    transaction_type: "credit",
-  },
-  {
-    amount: 2500,
-    category: "withdrawal",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "2",
-    paid_at: "2024-01-16T14:20:00Z",
-    payment_method: "bank_transfer",
-    payment_status: "successful",
-    payment_type: "bank",
-    reference: "REF-002",
-    transaction_reference: "TXN-20240116-002",
-    transaction_type: "debit",
-  },
-  {
-    amount: 1000,
-    category: "game",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "3",
-    paid_at: "2024-01-17T09:00:00Z",
-    payment_method: "wallet",
-    payment_status: "failed",
-    payment_type: "wallet",
-    reference: "REF-003",
-    transaction_reference: "TXN-20240117-003",
-    transaction_type: "debit",
-  },
-  {
-    amount: 10000,
-    category: "deposit",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "4",
-    paid_at: "2024-01-18T11:45:00Z",
-    payment_method: "card",
-    payment_status: "pending",
-    payment_type: "card",
-    reference: "REF-004",
-    transaction_reference: "TXN-20240118-004",
-    transaction_type: "credit",
-  },
-  {
-    amount: 3000,
-    category: "game",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "6",
-    paid_at: "2024-01-19T16:00:00Z",
-    payment_method: "wallet",
-    payment_status: "successful",
-    payment_type: "wallet",
-    reference: "REF-005",
-    transaction_reference: "TXN-20240119-005",
-    transaction_type: "debit",
-  },
-   {
-    amount: 3000,
-    category: "game",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "7",
-    paid_at: "2024-01-19T16:00:00Z",
-    payment_method: "wallet",
-    payment_status: "successful",
-    payment_type: "wallet",
-    reference: "REF-005",
-    transaction_reference: "TXN-20240119-005",
-    transaction_type: "debit",
-  },
-   {
-    amount: 3000,
-    category: "game",
-    currency: "NGN",
-    customer_email: "johndoe@gmail.com",
-    id: "8",
-    paid_at: "2024-01-19T16:00:00Z",
-    payment_method: "wallet",
-    payment_status: "successful",
-    payment_type: "wallet",
-    reference: "REF-005",
-    transaction_reference: "TXN-20240119-005",
-    transaction_type: "debit",
-  },
-]
-
 const TransactionScreen = () => {
 
   const [transactions, setTransactions] = useState<transactionsType[]>([])
@@ -291,8 +190,7 @@ const TransactionScreen = () => {
               </View>
             </View>
           )}
-          // data={loadingTransactions ? [] : transactions}
-          data={loadingTransactions ? [] : staticTransactions}
+          data={loadingTransactions ? [] : transactions}
           keyExtractor={(item) => item.id}
           renderItem={renderTickets}
           showsVerticalScrollIndicator={false}

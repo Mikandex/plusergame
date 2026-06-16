@@ -5,6 +5,7 @@ import {
   Text,
   useWindowDimensions,
   ListRenderItem,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -19,19 +20,20 @@ import Animated, {
 import GameCard from '@/components/GameCard';
 import { Skeleton } from 'moti/skeleton';
 import { Ionicons } from '@expo/vector-icons';
-import LandingHeader from '@/components/landing/LandingHeader';
 import { useSkeletonCommonProps } from '@/utils/SkeletonProps';
 import HomeBanner from '@/components/HomeBanner';
 import RecentWinnings from '@/components/landing/RecentWinnings';
 import { images } from '@/constants';
 import BalanceCard from '@/components/BalanceCard';
+import getWallet from '@/utils/WalletApi';
+import HomeHeader from '@/components/HomeHeader';
+import getUnreadNotifications from '@/utils/getUnreadNotifications';
 
 type ListHeaderProps = {
   width: number;
   itemWidth: number;
   fullWidth: number;
   loadingLeaderBoard: boolean;
-  notificationCount: number;
   onStickySectionLayout: (y: number) => void;
 };
 
@@ -48,7 +50,6 @@ const ListHeader = memo(
     itemWidth,
     fullWidth,
     loadingLeaderBoard,
-    notificationCount,
     onStickySectionLayout,
   }: ListHeaderProps) => (
     <View>
@@ -123,21 +124,21 @@ const games: any = [
     title: "Reel Streak",
     description: "Spin the reels and match to win.",
     image: images.fruit,
-    route: "/(protected)/(routes)/LandingReelStreak"
+    route: "/(protected)/(routes)/ReelStreak"
   },
   {
     id: "8",
     title: "RPS Bet",
     description: "Rock, paper, scissors - bet and beat.",
     image: images.betting,
-    route: "/(protected)/(routes)/LandingRpsBet"
+    route: "/(protected)/(routes)/RPSBet"
   },
   {
     id: "9",
     title: "Spin 2 Win",
     description: "Spin the wheel and win big rewards.",
     image: images.spinToWin,
-    route: "/(protected)/(routes)/LandingSpin"
+    route: "/(protected)/(routes)/SpinWheel"
   },
 ];
 
@@ -153,7 +154,6 @@ const  AuthHomeScreen = () => {
   const skeletonProps = useSkeletonCommonProps();
   const [loadingTickets, setLoadingTickets] = useState(false);
   const loadingList = new Array(3).fill(null);
-  const [notificationCount, setNotificationCount] = useState(0);
   const [loadingLeaderBoard, setLoadingLeaderBoard] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(false)
@@ -203,6 +203,16 @@ const  AuthHomeScreen = () => {
 
   useEffect(() => {
     leaderBoard();
+    getWallet(false)
+    getUnreadNotifications();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      getWallet(true)
+    ]);
+    setRefreshing(false);
   }, []);
 
   const handleStickySectionLayout = useCallback((y: number) => {
@@ -216,11 +226,10 @@ const  AuthHomeScreen = () => {
         itemWidth={itemWidth}
         fullWidth={fullWidth}
         loadingLeaderBoard={loadingLeaderBoard}
-        notificationCount={notificationCount}
         onStickySectionLayout={handleStickySectionLayout}
       />
     ),
-    [width, itemWidth, fullWidth, loadingLeaderBoard, notificationCount, handleStickySectionLayout],
+    [width, itemWidth, fullWidth, loadingLeaderBoard, handleStickySectionLayout],
   );
 
   const renderItem: ListRenderItem<any> = useCallback(
@@ -265,7 +274,7 @@ const  AuthHomeScreen = () => {
     >
       <View style={{ flex: 1, paddingHorizontal: 16 }}>
 
-        <LandingHeader profile notificationCount={notificationCount}/>
+        <HomeHeader/>
 
         <Animated.FlatList
           data={games}
@@ -278,6 +287,14 @@ const  AuthHomeScreen = () => {
           scrollEventThrottle={16}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 8 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={"#fff"}
+              colors={['#EF9439']}
+            />
+          }
         />
 
         <Animated.View
@@ -293,7 +310,7 @@ const  AuthHomeScreen = () => {
           ]}
           pointerEvents={overlayActive ? 'box-none' : 'none'}
         >
-          <LandingHeader profile notificationCount={notificationCount}/>
+          <HomeHeader/>
           <StickySection compact={true}/>
         </Animated.View>
 

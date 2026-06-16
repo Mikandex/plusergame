@@ -62,7 +62,7 @@ useEffect(() => {
     );
   }
 
-  return <Redirect href={isAuthenticated ? "/(tabs)/Home" : "/Splash"} />;
+  return <Redirect href={isAuthenticated ? "/(tabs)/home" : "/Splash"} />;
 }
 
 const styles = StyleSheet.create({

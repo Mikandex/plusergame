@@ -4,14 +4,23 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "env": {
+        "EXPO_PUBLIC_SERVER_URI": "https://buzzycash.viaspark.site/api/v1",
+        "EXPO_PUBLIC_IMAGE_URI": "https://buzzycash.viaspark.site"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal"
     },
     "production": {
+      "extends": "base",
       "autoIncrement": true,
       "ios": {
         "image": "latest"

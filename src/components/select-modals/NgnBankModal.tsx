@@ -1,5 +1,5 @@
 import { Modal, View, Text, TouchableOpacity, FlatList, ActivityIndicator, Image, Pressable } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Entypo from '@expo/vector-icons/Entypo';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +7,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SearchInput from '../SearchInput';
+import { axiosClient } from '@/globalApi';
+import Toast from 'react-native-toast-message';
 
 type bankType = {
     code: string; 
@@ -14,38 +16,38 @@ type bankType = {
     name: string; 
 }[]
 
-const data = [
-  { "code": "044", "name": "Access Bank", "logo": "https://nigerianbanks.xyz/logo/access-bank.png" },
-  { "code": "023", "name": "Citibank Nigeria", "logo": "https://nigerianbanks.xyz/logo/citibank.png" },
-  { "code": "050", "name": "EcoBank Nigeria", "logo": "https://nigerianbanks.xyz/logo/ecobank-nigeria.png" },
-  { "code": "070", "name": "Fidelity Bank", "logo": "https://nigerianbanks.xyz/logo/fidelity-bank.png" },
-  { "code": "011", "name": "First Bank of Nigeria", "logo": "https://nigerianbanks.xyz/logo/first-bank-of-nigeria.png" },
-  { "code": "214", "name": "First City Monument Bank", "logo": "https://nigerianbanks.xyz/logo/first-city-monument-bank.png" },
-  { "code": "058", "name": "Guaranty Trust Bank", "logo": "https://nigerianbanks.xyz/logo/guaranty-trust-bank.png" },
-  { "code": "030", "name": "Heritage Bank", "logo": "https://nigerianbanks.xyz/logo/heritage-bank.png" },
-  { "code": "301", "name": "Jaiz Bank", "logo": "https://nigerianbanks.xyz/logo/jaiz-bank.png" },
-  { "code": "082", "name": "Keystone Bank", "logo": "https://nigerianbanks.xyz/logo/keystone-bank.png" },
-  { "code": "526", "name": "Moniepoint MFB", "logo": "https://nigerianbanks.xyz/logo/moniepoint-microfinance-bank.png" },
-  { "code": "076", "name": "Polaris Bank", "logo": "https://nigerianbanks.xyz/logo/polaris-bank.png" },
-  { "code": "101", "name": "ProvidusBank", "logo": "https://nigerianbanks.xyz/logo/providus-bank.png" },
-  { "code": "221", "name": "Stanbic IBTC Bank", "logo": "https://nigerianbanks.xyz/logo/stanbic-ibtc-bank.png" },
-  { "code": "068", "name": "Standard Chartered Bank", "logo": "https://nigerianbanks.xyz/logo/standard-chartered-bank.png" },
-  { "code": "232", "name": "Sterling Bank", "logo": "https://nigerianbanks.xyz/logo/sterling-bank.png" },
-  { "code": "100", "name": "Suntrust Bank", "logo": "https://nigerianbanks.xyz/logo/suntrust-bank.png" },
-  { "code": "032", "name": "Union Bank of Nigeria", "logo": "https://nigerianbanks.xyz/logo/union-bank-of-nigeria.png" },
-  { "code": "033", "name": "United Bank for Africa", "logo": "https://nigerianbanks.xyz/logo/united-bank-for-africa.png" },
-  { "code": "215", "name": "Unity Bank", "logo": "https://nigerianbanks.xyz/logo/unity-bank.png" },
-  { "code": "035", "name": "Wema Bank", "logo": "https://nigerianbanks.xyz/logo/wema-bank.png" },
-  { "code": "057", "name": "Zenith Bank", "logo": "https://nigerianbanks.xyz/logo/zenith-bank.png" },
-  { "code": "000026", "name": "Taj Bank", "logo": "https://nigerianbanks.xyz/logo/taj-bank.png" },
-  { "code": "000027", "name": "Globus Bank", "logo": "https://nigerianbanks.xyz/logo/globus-bank.png" },
-  { "code": "000029", "name": "Lotus Bank", "logo": "https://nigerianbanks.xyz/logo/lotus-bank.png" },
-  { "code": "565", "name": "Carbon", "logo": "https://nigerianbanks.xyz/logo/carbon.png" },
-  { "code": "090115", "name": "TCF MFB", "logo": "" },
-  { "code": "50211", "name": "Kuda MFB", "logo": "https://nigerianbanks.xyz/logo/kuda-bank.png" },
-  { "code": "000025", "name": "Opay", "logo": "https://nigerianbanks.xyz/logo/opay.png" },
-  { "code": "000023", "name": "PalmPay", "logo": "https://nigerianbanks.xyz/logo/palmpay.png" }
-]
+// const data = [
+//   { "code": "044", "name": "Access Bank", "logo": "https://nigerianbanks.xyz/logo/access-bank.png" },
+//   { "code": "023", "name": "Citibank Nigeria", "logo": "https://nigerianbanks.xyz/logo/citibank.png" },
+//   { "code": "050", "name": "EcoBank Nigeria", "logo": "https://nigerianbanks.xyz/logo/ecobank-nigeria.png" },
+//   { "code": "070", "name": "Fidelity Bank", "logo": "https://nigerianbanks.xyz/logo/fidelity-bank.png" },
+//   { "code": "011", "name": "First Bank of Nigeria", "logo": "https://nigerianbanks.xyz/logo/first-bank-of-nigeria.png" },
+//   { "code": "214", "name": "First City Monument Bank", "logo": "https://nigerianbanks.xyz/logo/first-city-monument-bank.png" },
+//   { "code": "058", "name": "Guaranty Trust Bank", "logo": "https://nigerianbanks.xyz/logo/guaranty-trust-bank.png" },
+//   { "code": "030", "name": "Heritage Bank", "logo": "https://nigerianbanks.xyz/logo/heritage-bank.png" },
+//   { "code": "301", "name": "Jaiz Bank", "logo": "https://nigerianbanks.xyz/logo/jaiz-bank.png" },
+//   { "code": "082", "name": "Keystone Bank", "logo": "https://nigerianbanks.xyz/logo/keystone-bank.png" },
+//   { "code": "526", "name": "Moniepoint MFB", "logo": "https://nigerianbanks.xyz/logo/moniepoint-microfinance-bank.png" },
+//   { "code": "076", "name": "Polaris Bank", "logo": "https://nigerianbanks.xyz/logo/polaris-bank.png" },
+//   { "code": "101", "name": "ProvidusBank", "logo": "https://nigerianbanks.xyz/logo/providus-bank.png" },
+//   { "code": "221", "name": "Stanbic IBTC Bank", "logo": "https://nigerianbanks.xyz/logo/stanbic-ibtc-bank.png" },
+//   { "code": "068", "name": "Standard Chartered Bank", "logo": "https://nigerianbanks.xyz/logo/standard-chartered-bank.png" },
+//   { "code": "232", "name": "Sterling Bank", "logo": "https://nigerianbanks.xyz/logo/sterling-bank.png" },
+//   { "code": "100", "name": "Suntrust Bank", "logo": "https://nigerianbanks.xyz/logo/suntrust-bank.png" },
+//   { "code": "032", "name": "Union Bank of Nigeria", "logo": "https://nigerianbanks.xyz/logo/union-bank-of-nigeria.png" },
+//   { "code": "033", "name": "United Bank for Africa", "logo": "https://nigerianbanks.xyz/logo/united-bank-for-africa.png" },
+//   { "code": "215", "name": "Unity Bank", "logo": "https://nigerianbanks.xyz/logo/unity-bank.png" },
+//   { "code": "035", "name": "Wema Bank", "logo": "https://nigerianbanks.xyz/logo/wema-bank.png" },
+//   { "code": "057", "name": "Zenith Bank", "logo": "https://nigerianbanks.xyz/logo/zenith-bank.png" },
+//   { "code": "000026", "name": "Taj Bank", "logo": "https://nigerianbanks.xyz/logo/taj-bank.png" },
+//   { "code": "000027", "name": "Globus Bank", "logo": "https://nigerianbanks.xyz/logo/globus-bank.png" },
+//   { "code": "000029", "name": "Lotus Bank", "logo": "https://nigerianbanks.xyz/logo/lotus-bank.png" },
+//   { "code": "565", "name": "Carbon", "logo": "https://nigerianbanks.xyz/logo/carbon.png" },
+//   { "code": "090115", "name": "TCF MFB", "logo": "" },
+//   { "code": "50211", "name": "Kuda MFB", "logo": "https://nigerianbanks.xyz/logo/kuda-bank.png" },
+//   { "code": "000025", "name": "Opay", "logo": "https://nigerianbanks.xyz/logo/opay.png" },
+//   { "code": "000023", "name": "PalmPay", "logo": "https://nigerianbanks.xyz/logo/palmpay.png" }
+// ]
 
 const NgnBankModal = ({placeholder, header, showModal, close, selectedValue, title, handlePress, handleShowModal}: {placeholder: string; header: string; showModal: boolean; close: () => void; selectedValue: string; title: string; handlePress: (bank: any) => void, handleShowModal: () => void}) => {
 
@@ -55,9 +57,45 @@ const NgnBankModal = ({placeholder, header, showModal, close, selectedValue, tit
     const [allBanks, setAllBanks] = useState<bankType>([])
     const [query, setQuery] = useState('');
 
+   const data = async () => {
+    
+        setLoading(true)
+    
+        try {
+            
+            const result = await axiosClient.get("/withdrawal/list-banks")
+    
+            console.log("d", result.data)
+            setItems(result.data || [])
+            setAllBanks(result.data || [])
+    
+    
+        } catch (error: any) {
+            Toast.show({
+                type: 'error',
+                text1: error.response.data.message
+            });
+        } finally {
+            setLoading(false)
+        }
+    }
+
     useEffect(() => {
-        setItems(data)
-    },[])
+        data()
+    }, [])
+
+    const filteredBanks = useMemo(() => {
+        return query
+            ? allBanks.filter(bank =>
+                bank.name.toLowerCase().includes(query.toLowerCase()) ||
+                bank.code.includes(query)
+            )
+            : allBanks;
+    }, [query, allBanks]);
+
+    useEffect(() => {
+        setItems(filteredBanks);
+    }, [filteredBanks]);
 
   return (
     <View className='flex-1 items-center justify-center'>
@@ -72,7 +110,7 @@ const NgnBankModal = ({placeholder, header, showModal, close, selectedValue, tit
                     </View>
                     {
                         loading ? (
-                            <ActivityIndicator size="large" color="black"/>
+                            <ActivityIndicator size="large" color="#fff"/>
                         ) : (
                             <View className='w-full flex-1'>
                                 <View className='w-full my-2'>
@@ -125,7 +163,7 @@ const NgnBankModal = ({placeholder, header, showModal, close, selectedValue, tit
                 </TouchableOpacity>
             </View>
         </View>
-        <StatusBar style={"dark"}/>
+        <StatusBar style={"light"}/>
     </View>
   )
 }

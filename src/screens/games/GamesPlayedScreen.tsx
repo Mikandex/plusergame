@@ -19,54 +19,6 @@ type GameItem = {
   stake: number;
 }
 
-const staticGames: GameItem[] = [
-  {
-    id: "1",
-    category: "football",
-    is_win: true,
-    multiplier: "2.5",
-    payout: 12500,
-    played_at: "2024-01-15T10:30:00Z",
-    stake: 5000,
-  },
-  {
-    id: "2",
-    category: "basketball",
-    is_win: false,
-    multiplier: "1.8",
-    payout: 0,
-    played_at: "2024-01-16T14:20:00Z",
-    stake: 3000,
-  },
-  {
-    id: "3",
-    category: "tennis",
-    is_win: true,
-    multiplier: "3.0",
-    payout: 9000,
-    played_at: "2024-01-17T09:00:00Z",
-    stake: 3000,
-  },
-  {
-    id: "4",
-    category: "football",
-    is_win: false,
-    multiplier: "1.5",
-    payout: 0,
-    played_at: "2024-01-18T11:45:00Z",
-    stake: 2000,
-  },
-  {
-    id: "5",
-    category: "basketball",
-    is_win: true,
-    multiplier: "4.0",
-    payout: 20000,
-    played_at: "2024-01-19T16:00:00Z",
-    stake: 5000,
-  },
-]
-
 const PAGE_SIZE = 20;
 
 export default function GamesPlayedScreen() {
@@ -137,8 +89,7 @@ export default function GamesPlayedScreen() {
           <Loading/>
         ) : (
           <FlatList
-            // data={games}
-            data={staticGames}
+            data={games}
             keyExtractor={(item) => item.id}
             renderItem={renderGamesHistory}
             showsVerticalScrollIndicator={false}

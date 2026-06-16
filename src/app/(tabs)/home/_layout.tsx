@@ -7,8 +7,8 @@ const _layout = () => {
       headerShown: false
     }}>
       <Stack.Screen name='index'/>
-      <Stack.Screen name='EditProfile'/>
-      <Stack.Screen name='Support'/>
+      <Stack.Screen name='Deposit'/>
+      <Stack.Screen name='Withdraw'/>
     </Stack>
   )
 }

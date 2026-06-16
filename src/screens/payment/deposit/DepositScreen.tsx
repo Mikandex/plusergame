@@ -3,9 +3,10 @@ import CustomButton from '@/components/CustomButton';
 import FormField from '@/components/FormField';
 import Header from '@/components/Header';
 import Picker from '@/components/Picker';
-import NgnBankModal from '@/components/select-modals/NgnBankModal';
 import { data } from '@/constants';
+import { axiosClient } from '@/globalApi';
 import { useAuthStore } from '@/store/AuthStore';
+import { useLoaderStore } from '@/store/loaderStore';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,41 +18,98 @@ import {
   ScrollView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
+import { z } from 'zod'
+
+const baseSchema = z.object({
+  means: z.string().min(1, 'Select a deposit means'),
+  amount: z.string()
+    .min(1, 'Add an amount to deposit')
+    .refine(val => Number(val) >= 100, 'Amount should be at least 100 Naira'),
+})
+
+const airtimeSchema = baseSchema.extend({
+  phone: z.string().min(1, 'Enter a phone number'),
+})
+
+const getSchema = (means: string) => {
+  if (means === 'airtime') return airtimeSchema
+  return baseSchema
+}
 
 export default function DepositScreen() {
 
+  const { isLoading, setLoading } = useLoaderStore()
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({
     means: '',
     amount: '',
-    account_number: '',
-    bank_name: '',
     phone: ''
   });
-  const [isSubmitting, setIsSubmitting] = useState(false)
-    const [isGettingName, setIsGettingName] = useState(false)
     const [accountName, setAccountName] = useState(null)
-    const [showSuccessModal, setShowSuccessModal] = useState(false)
     const bottomSheetConfirmPinModalRef = useRef<BottomSheetModal>(null);
-      const [pinModalVisible, setPinModalVisible] = useState(false);
-      const snapPoints = useMemo(() => ["80%"], [])
+    const [pinModalVisible, setPinModalVisible] = useState(false);
+    const snapPoints = useMemo(() => ["80%"], [])
 
   const bottom = useSafeAreaInsets().bottom;
   const { login } = useAuthStore()
 
-  const handleContinue = () => {
-    handlePresentModalConfirmPinPress()
-    // router.push('/(tabs)/Home');
+  const handleContinue = async () => {
+    if (isLoading) return
+
+    const result = getSchema(form.means).safeParse(form)
+
+    if (!result.success) {
+      const firstIssue = result.error.issues[0];
+
+      return Toast.show({
+        type: 'info',
+        text1: firstIssue.message,
+        text2: "Please check your inputs.",
+      });
+    }
+
+    if(form.means === "cash"){
+
+      try {
+        setLoading(true)
+    
+        const result = await axiosClient.post("/wallet/fund", { amount: Number(form.amount), payment_method: "nomba" })
+        console.log(result.data)
+    
+        setForm({
+          means: '',
+          amount: '',
+          phone: ''
+        })
+    
+        router.push({
+            pathname: "/(protected)/(routes)/DepositPaymentGateway",
+            params: { paylink: result.data.checkout_link }
+        })
+    
+      } catch (error: any) {
+          Toast.show({
+              type: 'error',
+              text1: error.response.data.message || "Please try again later"
+          });
+    
+      } finally {
+        setLoading(false)
+      } 
+    }
+
+    // handlePresentModalConfirmPinPress()
   };
 
   const handleShowModal = () => {
-        setShowModal(!showModal)
+      setShowModal(!showModal)
     }
 
     const handlePress = (bank: {code: string; logo: string; name: string}) => {
-        // setForm({ ...form, recipientBankName: bank?.name, recipientBankCode: bank?.code, recipientAccountNumber: "" })
-        setShowModal(!showModal)
-        setAccountName(null)   
+      // setForm({ ...form, recipientBankName: bank?.name, recipientBankCode: bank?.code, recipientAccountNumber: "" })
+      setShowModal(!showModal)
+      setAccountName(null)   
     }
 
     const closeModal = () => {
@@ -99,14 +157,6 @@ export default function DepositScreen() {
                 {/* Airtime Deposit */}
                 {form.means === "airtime" && (
                     <FormField title="Phone no." value={form.phone} placeholder="Enter phone no" handleChangeText={(e: any) => setForm({ ...form, phone: e })} keyboardType='numeric' otherStyles='mt-4'/>
-                )}
-
-                {/* Cash Deposit */}
-                {form.means === "cash" && (
-                    <>
-                        <FormField title="Account number" value={form.account_number} placeholder="Enter account number" handleChangeText={(e: any) => setForm({ ...form, account_number: e })} keyboardType='numeric' otherStyles='mt-4'/>
-                        <NgnBankModal placeholder='Select Bank' selectedValue={form.bank_name} header="Select Bank" title='Select Bank' showModal={showModal} close={closeModal} handlePress={handlePress} handleShowModal={() => handleShowModal()} />
-                    </>
                 )}
 
                 {form.means && (

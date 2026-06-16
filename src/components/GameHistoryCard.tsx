@@ -2,7 +2,6 @@ import { View, Text, Pressable} from 'react-native'
 import React from 'react'
 import moment from 'moment'
 import displayCurrency from '@/utils/displayCurrency';
-import { useThemeStore } from '@/store/ThemeStore';
 import { FontAwesome6 } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 // import Toast from 'react-native-toast-message';
@@ -13,7 +12,7 @@ const statusColors: Record<string, string> = {
 };
 
 const GameHistoryCard = ({item, index}: {item: any; index: number}) => {
-  const { theme } = useThemeStore();
+
   const isEven = index % 2 === 0;
   // const bgClass = isEven ? 'bg-white' : 'bg-gray-200';
   // const badgeBg = isEven ? 'bg-gray-200' : 'bg-white';

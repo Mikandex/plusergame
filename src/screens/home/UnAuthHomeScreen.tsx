@@ -30,7 +30,6 @@ type ListHeaderProps = {
   itemWidth: number;
   fullWidth: number;
   loadingLeaderBoard: boolean;
-  notificationCount: number;
   onStickySectionLayout: (y: number) => void;
 };
 
@@ -47,7 +46,6 @@ const ListHeader = memo(
     itemWidth,
     fullWidth,
     loadingLeaderBoard,
-    notificationCount,
     onStickySectionLayout,
   }: ListHeaderProps) => (
     <View>
@@ -211,7 +209,6 @@ const  UnAuthHomeScreen = () => {
         itemWidth={itemWidth}
         fullWidth={fullWidth}
         loadingLeaderBoard={loadingLeaderBoard}
-        notificationCount={notificationCount}
         onStickySectionLayout={handleStickySectionLayout}
       />
     ),
@@ -260,7 +257,7 @@ const  UnAuthHomeScreen = () => {
     >
       <View style={{ flex: 1, paddingHorizontal: 16 }}>
 
-        <LandingHeader profile notificationCount={notificationCount}/>
+        <LandingHeader/>
 
         <Animated.FlatList
           data={games}
@@ -288,7 +285,7 @@ const  UnAuthHomeScreen = () => {
           ]}
           pointerEvents={overlayActive ? 'box-none' : 'none'}
         >
-          <LandingHeader profile notificationCount={notificationCount}/>
+          <LandingHeader/>
           <StickySection compact={true}/>
         </Animated.View>
 

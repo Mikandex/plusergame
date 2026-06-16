@@ -423,7 +423,7 @@
     "v8_use_siphash": 1,
     "want_separate_host_toolset": 0,
     "nodedir": "/var/folders/fz/ldh0fjs91tn63hp5krmbq17h0000gn/T/prebuild/node/20.19.6",
-    "python": "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "python": "/opt/anaconda3/bin/python3",
     "standalone_static_library": 1,
     "target": "20.19.6",
     "build_v8_with_gn": "false",

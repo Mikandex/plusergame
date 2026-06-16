@@ -3,12 +3,9 @@ import React from 'react'
 import moment from 'moment'
 import displayCurrency from '@/utils/displayCurrency';
 import Feather from '@expo/vector-icons/Feather';
-import { useThemeStore } from '@/store/ThemeStore';
 import { transactionsType } from '../../types/types';
 
 const TransactionCard = ({item, handlePress, index}: {item: transactionsType; handlePress: () => void, index: number}) => {
-
-  const { theme } = useThemeStore();
 
   return (
     <Pressable onPress={handlePress} className='border-b w-full h-28 bg-charcoal-light border-charcoal'>

@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import '../global.css';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+import LayoutLoader from '@/hooks/LayoutLoader';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -36,6 +37,11 @@ export default function RootLayout() {
       <BottomSheetModalProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="Splash" />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(protected)" />
+          <Stack.Screen name="(landing)" />
         </Stack>
         <Toast
         config={{
@@ -95,6 +101,7 @@ export default function RootLayout() {
           ),
         }}
       />
+      <LayoutLoader/>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>
   )

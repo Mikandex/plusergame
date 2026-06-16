@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect } from "react";
 import {
   View,
@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Octicons, Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import CustomButton from "@/components/CustomButton";
+import displayCurrency from "@/utils/displayCurrency";
 
 const NOTCH_RADIUS = 18;
 
@@ -29,18 +30,11 @@ type ReceiptRow = {
   multiline?: boolean;
 };
 
-const rows: ReceiptRow[] = [
-  {label: "Recipient Details", value: "JOHN DOE\nFirst Bank of Nigeria | 2020362609"},
-  { label: "Amount",           value: "₦5,000,000.00" },
-  { label: "Naration",         value: "Personal withdraw" },
-  { label: "Transaction No.",  value: "56478786768798076677069​8", copyable: true },
-  { label: "Transaction Date", value: "Feb. 10th 2025   4:00 PM" },
-  { label: "Session ID",       value: "436755668758658798686869​373698379", copyable: true },
-];
-
 export default function SuccessfulReceiptScreen() {
 
   const { top, bottom } = useSafeAreaInsets();
+  const { info } = useLocalSearchParams() as any;
+  const parsedInfo = info ? JSON.parse(info) : null
 
   const headerOpacity    = useSharedValue(0);
   const headerTranslateY = useSharedValue(40);
@@ -66,6 +60,15 @@ export default function SuccessfulReceiptScreen() {
     await Clipboard.setStringAsync(text);
   };
 
+  const rows: ReceiptRow[] = [
+    // {label: "Recipient Details", value: "JOHN DOE\nFirst Bank of Nigeria | 2020362609"},
+    { label: "Amount",           value: displayCurrency(Number(parsedInfo?.amount)) },
+    { label: "Naration",         value: parsedInfo?.category },
+    { label: "Payment Type",         value: parsedInfo?.payment_type },
+    { label: "Transaction No.",  value: parsedInfo?.transaction_reference, copyable: true },
+    { label: "Reference",       value: parsedInfo?.reference, copyable: true },
+  ];
+
   return (
     <View className="flex-1 bg-charcoal">
       <ScrollView
@@ -83,14 +86,16 @@ export default function SuccessfulReceiptScreen() {
         </TouchableOpacity>
 
         {/* Header */}
-        <Animated.View style={headerStyle} className="mb-8 items-center px-2">
-          <Text className="text-2xl font-msbold text-yellow text-center mb-3">
-            Successful Withdraw!
-          </Text>
-          <Text className="text-sm font-mmedium text-white text-center leading-6">
-            Your account has been successfully credited. You are an amazing gamer. Play often to win more
-          </Text>
-        </Animated.View>
+        {parsedInfo?.status == "successful" && (
+          <Animated.View style={headerStyle} className="mb-8 items-center px-2">
+            <Text className="text-2xl font-msbold text-yellow text-center mb-3">
+              Successful Withdraw!
+            </Text>
+            <Text className="text-sm font-mmedium text-white text-center leading-6">
+              Your account has been successfully credited. You are an amazing gamer. Play often to win more
+            </Text>
+          </Animated.View>
+        )}
 
         {/* Receipt Card */}
         <Animated.View
@@ -177,7 +182,7 @@ export default function SuccessfulReceiptScreen() {
           {/* Bottom stub — Download & Share */}
           <View className="bg-charcoal-light px-5 pt-5 pb-6">
             <View className="flex-row gap-3">
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 activeOpacity={0.8}
                 className="flex-1 flex-row items-center justify-center gap-1 border border-white rounded-full py-3"
               >
@@ -191,7 +196,7 @@ export default function SuccessfulReceiptScreen() {
               >
                 <Feather name="share" size={16} color="#fff" />
                 <Text className="text-xs font-msbold text-white">Share Receipt</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
         </Animated.View>
@@ -204,7 +209,7 @@ export default function SuccessfulReceiptScreen() {
       >
         <CustomButton
           title="Return to Homepage"
-          handlePress={() => router.replace("/(tabs)/Home")}
+          handlePress={() => router.replace("/(tabs)/home")}
           containerStyles="w-full border border-yellow"
           bgColor="transparent"
           textStyles="text-yellow"

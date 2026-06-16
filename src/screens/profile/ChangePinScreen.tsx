@@ -8,6 +8,30 @@ import Header from '@/components/Header'
 import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { OtpInput } from 'react-native-otp-entry'
+import z from 'zod'
+import Toast from 'react-native-toast-message'
+import { axiosClient } from '@/globalApi'
+import { useLoaderStore } from '@/store/loaderStore'
+
+const pinSchema = z
+.object({
+  currentPin: z
+    .string()
+    .min(1, "Current pin is required"),
+
+  newPin: z
+    .string()
+    .length(4, "New PIN must be exactly 4 digits")
+    .regex(/^\d+$/, "New PIN must contain only digits"),
+
+  confirmNewPin: z
+    .string()
+    .min(1, "Please confirm your new PIN"),
+})
+.refine((data) => data.newPin === data.confirmNewPin, {
+  message: "New PINs do not match",
+  path: ["confirmNewPin"],
+})
 
 const ChangePinScreen = () => {
 
@@ -16,15 +40,63 @@ const ChangePinScreen = () => {
   const [confirmNewPin, setConfirmNewPin] = useState('')
   const [resetKey, setResetKey] = useState(0);
   const bottom = useSafeAreaInsets().bottom
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { isLoading, setLoading } = useLoaderStore()
 
   console.log("currentpin", currentPin)
 
   const submit = async () => {
+    if (isLoading) return
 
+    const data = {
+      currentPin,
+      newPin,
+      confirmNewPin
+    }
+    const result = pinSchema.safeParse(data)
+            
+    if (!result.success) {
+      const firstIssue = result.error.issues[0];
+
+      return Toast.show({
+        type: 'info',
+        text1: firstIssue.message,
+        text2: "Please check your inputs.",
+      });
+    }
+
+    try {
+
+      setLoading(true)
+  
+      const result = await axiosClient.patch("/auth/change-password", {
+        current_password: currentPin,
+        new_password: newPin,
+        confirm_new_password: confirmNewPin
+      })
+
+      Toast.show({
+        type: 'success',
+        text1: result.data.message,
+        text2: "Password Updated",
+      });
+
+      setCurrentPin("")
+      setNewPin("")
+      setConfirmNewPin("")
+
+    } catch (error: any) {
+      Toast.show({
+        type: 'error',
+        text1: error.response?.data?.message || "Please try again later"
+      });
+
+    } finally {
+      setLoading(false)
+    } 
     
   }
   
-
   return (
     <View className="bg-charcoal h-full">
       <Header title="Change PIN" onpress={() => router.back()}/>

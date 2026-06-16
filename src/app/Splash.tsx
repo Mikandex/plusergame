@@ -26,7 +26,7 @@ export default function Splash() {
       withDelay(600, withTiming(ZOOM_STAGES[2].height, { duration: 0 })),
     );
 
-    const navTimer = setTimeout(() => router.replace("/(tabs)/Home"), 3200);
+    const navTimer = setTimeout(() => router.replace("/(tabs)/home"), 3200);
     return () => clearTimeout(navTimer);
   }, []);
 

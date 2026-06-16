@@ -14,7 +14,7 @@ export default function TabLayout() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
-          if (route.name === "Home") {
+          if (route.name === "home") {
             return (
               <Ionicons
                 name="home-outline"
@@ -71,7 +71,7 @@ export default function TabLayout() {
         }
       })}
     >
-      <Tabs.Screen name="Home" options={{ title: "Home" }} />
+      <Tabs.Screen name="home" options={{ title: "Home" }} />
       <Tabs.Screen name="GamesPlayed" options={{ title: "Games Played" }} 
         listeners={() => ({
           tabPress: (e) => {
