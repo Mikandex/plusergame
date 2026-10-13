@@ -16,7 +16,7 @@ const VirtualGameCard = ({
       className="w-40 h-36 relative rounded-lg overflow-hidden bg-red-200"
     >
       <Image
-        source={{ uri: item.banner }}
+        source={typeof item.banner === 'string' ? { uri: item.banner } : item.banner}
         style={{ width: "100%", height: "100%", position: "absolute" }}
         contentFit="cover"
         cachePolicy="disk"

@@ -1,4 +1,6 @@
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { router } from 'expo-router';
+import { useAuthStore } from '@/store/AuthStore';
 import { Image as ExpoImage } from 'expo-image';
 import React, { useCallback, memo } from 'react';
 import { interpolate, useSharedValue } from 'react-native-reanimated';
@@ -10,22 +12,28 @@ const { width } = Dimensions.get('window');
 const sliderImages = [images.card1, images.card2, images.card3];
 
 type CarouselItemProps = {
-  source: string | number  // number for local, string for remote
+  source: string | number | object  // number/object for local, string for remote
 };
 
 const CarouselItem = memo(({ source }: CarouselItemProps) => {
   const blurhash = 'L~I64noffQfQfQfQfQfQfQfQfQfQ';
-    
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   return (
-    <View style={styles.itemContainer} className='bg-charcoal'>
+    <Pressable
+      style={styles.itemContainer}
+      className='bg-charcoal'
+      disabled={isAuthenticated}
+      onPress={() => router.push('/(onboarding)/Index')}
+    >
       <ExpoImage
-        source={typeof source === 'number' ? source : { uri: source }}
+        source={typeof source === 'string' ? { uri: source } : (source as any)}
         placeholder={{ blurhash }}
         cachePolicy="disk"
         contentFit="cover"
         style={{ width: "100%", height: "100%" }}
       />
-    </View>
+    </Pressable>
   );
 });
 
