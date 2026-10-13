@@ -24,6 +24,7 @@ import Animated, {
 import { z } from "zod";
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
+import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
 import { images } from '@/constants'
@@ -301,6 +302,10 @@ const CardScreen = () => {
               <Text style={styles.title}>Lower</Text>
             </View>
           </View>
+        </View>
+
+        <View style={{ alignItems: "flex-end" }}>
+          <GameBalancePill />
         </View>
 
         {/* STATS */}

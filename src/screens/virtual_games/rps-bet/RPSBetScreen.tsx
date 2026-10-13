@@ -8,6 +8,7 @@ import z from 'zod'
 import Toast from 'react-native-toast-message'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
+import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
 
@@ -157,6 +158,10 @@ const RPSBetScreen = () => {
               <Text style={styles.gold}>{multiplier}</Text>
             </View>
           </View>
+        </View>
+
+        <View style={{ alignItems: "flex-end" }}>
+          <GameBalancePill />
         </View>
 
         {/* STAKE */}

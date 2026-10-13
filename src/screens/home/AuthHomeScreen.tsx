@@ -82,63 +82,63 @@ const games: any = [
     title: "Dice",
     description: "Challenge luck with every roll.",
     image: images.dice,
-    route: "/(protected)/(routes)/Dice"
+    route: "/(protected)/(routes)/GameDetails?gameKey=dice"
   },
   {
     id: "2",
     title: "Lottery",
     description: "Pick your numbers and win big prizes.",
     image: images.lottery,
-    route: "/(protected)/(routes)/Lottery"
+    route: "/(protected)/(routes)/GameDetails?gameKey=lottery"
   },
   {
     id: "3",
     title: "Card",
     description: "Flip the cards and test your luck.",
     image: images.card,
-    route: "/(protected)/(routes)/Card"
+    route: "/(protected)/(routes)/GameDetails?gameKey=card"
   },
   {
     id: "4",
     title: "Coin",
     description: "Heads or tails - make your call.",
     image: images.coinPlaceholder,
-    route: "/(protected)/(routes)/Coin"
+    route: "/(protected)/(routes)/GameDetails?gameKey=coin"
   },
   {
     id: "5",
     title: "Hot Cold",
     description: "Pick a side and feel the heat.",
     image: images.hotCold,
-    route: "/(protected)/(routes)/HotCold"
+    route: "/(protected)/(routes)/GameDetails?gameKey=hotcold"
   },
   {
     id: "6",
     title: "Lucky Box",
     description: "Open the box and claim your prize.",
     image: images.box,
-    route: "/(protected)/(routes)/LuckyBox"
+    route: "/(protected)/(routes)/GameDetails?gameKey=luckybox"
   },
   {
     id: "7",
     title: "Reel Streak",
     description: "Spin the reels and match to win.",
     image: images.fruit,
-    route: "/(protected)/(routes)/ReelStreak"
+    route: "/(protected)/(routes)/GameDetails?gameKey=reelstreak"
   },
   {
     id: "8",
     title: "RPS Bet",
     description: "Rock, paper, scissors - bet and beat.",
     image: images.betting,
-    route: "/(protected)/(routes)/RPSBet"
+    route: "/(protected)/(routes)/GameDetails?gameKey=rpsbet"
   },
   {
     id: "9",
     title: "Spin 2 Win",
     description: "Spin the wheel and win big rewards.",
     image: images.spinToWin,
-    route: "/(protected)/(routes)/SpinWheel"
+    route: "/(protected)/(routes)/GameDetails?gameKey=spinwheel"
   },
 ];
 

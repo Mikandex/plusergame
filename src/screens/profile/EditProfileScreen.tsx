@@ -30,10 +30,13 @@ import * as FileSystem from 'expo-file-system';
 import { File as ExpoFile } from 'expo-file-system'
 import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { z } from 'zod';
+
+const emailSchema = z.string().email("Enter a valid email address");
 
 export default function EditProfileScreen() {
 
-  const { userProfile, setProfile } = useProfileStore()
+  const { userProfile, setProfile, setEmail } = useProfileStore()
   const [date, setDate] = useState(userProfile?.dateOfBirth ? new Date(userProfile.dateOfBirth) : new Date());
   const [open, setOpen] = useState(false)
   const [hasPickedDate, setHasPickedDate] = useState(!!userProfile?.dateOfBirth);
@@ -42,6 +45,8 @@ export default function EditProfileScreen() {
     email: userProfile?.email || "",
     gender: userProfile?.gender || '',
   });
+
+  const [emailError, setEmailError] = useState("");
 
   const { isLoading, setLoading } = useLoaderStore()
 
@@ -55,13 +60,15 @@ export default function EditProfileScreen() {
   const formerData = {
     fullName: userProfile.fullName,
     dateOfBirth: userProfile.dateOfBirth,
-    gender: userProfile.gender
+    gender: userProfile.gender,
+    email: userProfile.email || ""
   }
 
   const newData = {
     fullName: form.fullName,
     dateOfBirth: birthFormatted,
-    gender: form.gender
+    gender: form.gender,
+    email: form.email.trim()
   }
 
   const hasChanges = () => {
@@ -100,6 +107,18 @@ export default function EditProfileScreen() {
       });
     }
 
+    const trimmedEmail = form.email.trim();
+    const hadEmail = !!userProfile.email;
+
+    if (hadEmail || trimmedEmail) {
+      const parsed = emailSchema.safeParse(trimmedEmail);
+      if (!parsed.success) {
+        setEmailError(trimmedEmail ? parsed.error.issues[0].message : "Email is required");
+        return;
+      }
+    }
+    setEmailError("");
+
     if (!hasChanges()) {
       return Toast.show({
         type: 'info',
@@ -115,7 +134,8 @@ export default function EditProfileScreen() {
       const data = {
         full_name: form.fullName,
         date_of_birth: birthFormatted,
-        gender: form.gender
+        gender: form.gender,
+        ...(trimmedEmail && { email: trimmedEmail })
       }
 
       console.log(data)
@@ -126,6 +146,7 @@ export default function EditProfileScreen() {
         fullName: result.data.user.fullName || "",
         dateOfBirth: result.data.user.dateOfBirth || "",
         gender: result.data.user.gender || "",
+        email: result.data.user.email || trimmedEmail,
       }
 
       console.log(result.data)
@@ -138,6 +159,7 @@ export default function EditProfileScreen() {
       if (updatedProfile) {
         setProfile(updatedProfile);
       }
+      setEmail(updateUser.email);
 
       Toast.show({
         type: 'success',
@@ -149,9 +171,9 @@ export default function EditProfileScreen() {
     } catch (error: any) {
       Toast.show({
         type: 'error',
-        text1: error.response.data.message || "Please try again later"
+        text1: error.response?.data?.message || "Please try again later"
       });
-      console.log(error.response.data)
+      console.log(error.response?.data)
 
     } finally {
       setLoading(false)
@@ -309,7 +331,8 @@ export default function EditProfileScreen() {
                 <View className="bg-charcoal-light rounded-3xl p-6 mb-4">
 
                     <FormField title="Change Name" value={form.fullName} placeholder="Enter here" handleChangeText={(e: any) => setForm({ ...form, fullName: e })} />
-                    <FormField title="Enter Email" value={form.email} placeholder="Enter here" handleChangeText={(e: any) => setForm({ ...form, email: e })} otherStyles="mt-4" disabled/>
+                    <FormField title="Enter Email" value={form.email} placeholder="Enter here" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} handleChangeText={(e: any) => { setForm({ ...form, email: e }); if (emailError) setEmailError("") }} otherStyles="mt-4"/>
+                    {!!emailError && <Text className='text-red text-sm font-mregular mt-1'>{emailError}</Text>}
                     <Picker title='Select gender' value={form.gender} placeholder="Select gender" handleChangeText={(e: any) => setForm({ ...form, gender: e.value })} data={data.gender}/>
                     <View className={`space-y-2 mt-4`}>
                       <Text className={`text-base font-mregular pb-2 text-white`}>Date of Birth</Text>

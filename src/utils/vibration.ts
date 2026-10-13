@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 
-export const triggerHaptic = (type: 'roll' | 'win' | 'lose') => {
-  if (type === 'roll') {
+export const triggerHaptic = (type: 'light' | 'roll' | 'win' | 'lose') => {
+  if (type === 'roll' || type === 'light') {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 

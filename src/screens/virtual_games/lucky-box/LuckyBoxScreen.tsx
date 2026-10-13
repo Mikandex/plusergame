@@ -10,6 +10,7 @@ import AnimatedBox from '@/components/virtuals/AnimatedBox'
 import { z } from "zod"
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
+import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
 
@@ -193,6 +194,10 @@ const LuckyBoxScreen = () => {
             <Text style={styles.small}>PAYOUT</Text>
             <Text style={styles.gold}>{result?.payout}</Text>
           </View>
+        </View>
+
+        <View style={{ alignItems: "flex-end" }}>
+          <GameBalancePill />
         </View>
 
         {/* STAKE + MULTIPLIER */}

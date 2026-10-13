@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { KeyboardTypeOptions, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardTypeOptions, TextInputProps, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type formProps = {
   title?: string; 
@@ -12,10 +12,12 @@ type formProps = {
   disabled?: boolean;
   otherStyles?: string;
   keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: TextInputProps['autoCapitalize'];
+  autoCorrect?: boolean;
   [props:string]: any;
 }
 
-const FormField = ({ title, value, placeholder, inputBg, keyboardType, handleChangeText, disabled, labelStyle, otherStyles, ...props}: formProps) => {
+const FormField = ({ title, value, placeholder, inputBg, keyboardType, autoCapitalize, autoCorrect, handleChangeText, disabled, labelStyle, otherStyles, ...props}: formProps) => {
     
     const [isFocused, setIsFocused] = useState(false);
     const [showPassword, setShowPassword] = useState(false)
@@ -28,7 +30,7 @@ const FormField = ({ title, value, placeholder, inputBg, keyboardType, handleCha
     <View className={`space-y-2 ${otherStyles}`}>
       {title ? <Text className={`text-base text-white font-mregular pb-2 ${labelStyle ? labelStyle : 'text-black'}`}>{title}</Text> : ''}
       <View className={`${inputBg ? inputBg : 'bg-gray'} border w-full h-[46px] px-4 rounded-lg ${isFocused ? 'border-red' : 'border-gray'} items-center flex-row gap-1`}>
-        <TextInput className={`${inputBg ? inputBg : 'bg-inputBg'} flex-1 text-black font-mregular text-base h-full`} style={{ textAlignVertical: 'center' }} value={value} placeholder={placeholder} placeholderTextColor="#1B1F27" onChangeText={handleChangeText} secureTextEntry={(title === "Create Pin" || title === "Enter Pin") ? !showPassword : title === "Confirm Pin" ? !showConfirmPassword : title === "Current Pin" ? !showCurrentPassword : title === "New Pin" ? !showNewPassword : title === "Confirm New Pin" ? !showConfirmNewPassword : false} keyboardType={keyboardType ? keyboardType: 'default'} editable={!disabled} onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}/>
+        <TextInput className={`${inputBg ? inputBg : 'bg-inputBg'} flex-1 text-black font-mregular text-base h-full`} style={{ textAlignVertical: 'center' }} value={value} placeholder={placeholder} placeholderTextColor="#1B1F27" onChangeText={handleChangeText} secureTextEntry={(title === "Create Pin" || title === "Enter Pin") ? !showPassword : title === "Confirm Pin" ? !showConfirmPassword : title === "Current Pin" ? !showCurrentPassword : title === "New Pin" ? !showNewPassword : title === "Confirm New Pin" ? !showConfirmNewPassword : false} keyboardType={keyboardType ? keyboardType: 'default'} autoCapitalize={autoCapitalize} autoCorrect={autoCorrect} editable={!disabled} onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)}/>
         {(title === 'Create Pin' || title === 'Enter Pin') && (
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons name={!showPassword ? "eye-outline" : "eye-off-outline"} size={24} color="#1B1F27" />
