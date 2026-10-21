@@ -21,6 +21,7 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import z from 'zod';
+import { getApiErrorMessage, getApiErrorStatus } from '@/utils/apiErrorMessage';
 
 // const registerSchema = z
 // .object({
@@ -146,10 +147,13 @@ export default function Register() {
 
       const result = await axiosClient.post("/auth/register", data)
 
-      console.log(result.data)
       router.push({
         pathname: "/(onboarding)/RegisterOTP",
-        params: { user: JSON.stringify({ phone: result.data?.user?.phoneNumber }) },
+        params: {
+          user: JSON.stringify({
+            phone: result.data?.user?.phoneNumber || removePlusSign,
+          }),
+        },
       });
 
       setForm({
@@ -160,20 +164,22 @@ export default function Register() {
         confirmPassword: '',
         referralCode: ''
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(error);
+      const status = getApiErrorStatus(error);
 
       Toast.show({
         type: 'error',
-        text1: error.response.data.message,
+        text1: message,
       });
-      console.log(error.response)
 
-      if(error.response.status === 409 && error.response.data.message === "Account exists but not verified. Please login to complete verification"){
-
+      if (
+        status === 409 &&
+        message === "Account exists but not verified. Please login to complete verification"
+      ) {
         setTimeout(() => {
           router.replace("/(onboarding)/LogIn")
         }, 7000);
-
       }
 
     } finally {

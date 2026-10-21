@@ -1,312 +1,233 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from 'react-native'
-import React, { useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, AccessibilityInfo, ActivityIndicator } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  cancelAnimation,
-  runOnJS
-} from 'react-native-reanimated'
 import Toast from 'react-native-toast-message'
 import z from 'zod'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
 import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
-
-const symbols = ['🍒', '🍋', '🍊', '🍇', '💎'];
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import displayCurrency from '@/utils/displayCurrency'
+import { triggerHaptic } from '@/utils/vibration'
+import GameRulesSheet from '@/components/virtuals/GameRulesSheet'
+import RoundResultOverlay from '@/components/virtuals/RoundResultOverlay'
+import GameHistoryStrip from '@/components/virtuals/GameHistoryStrip'
+import GameStatsRow from '@/components/virtuals/GameStatsRow'
+import SlotCabinet from '@/components/virtuals/SlotCabinet'
+import { normalizeSlotSymbol } from '@/components/virtuals/SlotSymbol'
 
 const schema = z.object({
-  stake: z.coerce.number()
-    .min(50, "Minimum stake is 50")
-    .max(500, "Maximum stake is 500"),
-});
+  stake: z.coerce.number().min(50, 'Minimum stake is 50').max(500, 'Maximum stake is 500'),
+})
+
+const RULES_KEY = 'plusergame.rules.reel.v1'
+const SPIN_MS = 1100
+const SETTLE_MS = 1400
+
+const REEL_RULES = [
+  'Three reels. The payline is the gold band across the centre.',
+  'Your stake is taken when you hit SPIN. Match on the payline to win.',
+  'Stake ₦50–₦500. A hit pays the multiplier shown into your wallet.',
+  'The faces that stop are the house result — not a preview.',
+]
 
 const ReelStreakScreen = () => {
   const { top, bottom } = useSafeAreaInsets()
-
-  const [stake, setStake] = useState("50")
-  const [multiplier, setMultiplier] = useState("15x")
-  const [reels, setReels] = useState(["🍒", "🍒", "🍒"])
-  const [pulling, setPulling] = useState(false)
-  const [isWin, setIsWin] = useState(false)
-  const [resultText, setResultText] = useState("✨ pull the lever ✨")
-  const [payout, setPayout] = useState(0)
-  const [history, setHistory] = useState<boolean[]>([])
   const sfx = useSfx()
+  const [stake, setStake] = useState('50')
+  const [multiplier, setMultiplier] = useState('15x')
+  const [reels, setReels] = useState<[string, string, string]>(['🍒', '🍋', '🍊'])
+  const [spinning, setSpinning] = useState(false)
+  const [isWin, setIsWin] = useState(false)
+  const [payout, setPayout] = useState(0)
+  const [message, setMessage] = useState('')
+  const [history, setHistory] = useState<boolean[]>([])
   const [fetchWallet, setFetchWallet] = useState(false)
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  // animations per reel
-  const r1 = useSharedValue(0)
-  const r2 = useSharedValue(0)
-  const r3 = useSharedValue(0)
-
-  const stopReel = (reel: any, isLast = false, data?: any) => {
-    cancelAnimation(reel)
-    reel.value = withTiming(0, { duration: 200 })
-
-    if (isLast) {
-      runOnJS(finishSpin)(data)
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
     }
-  }
+  }, [])
 
-
-  const finishSpin = (data: any) => {
-    if (!data) return
-
-    const newReels = Array.isArray(data.reels)
-    ? data.reels
-    : ["❓", "❓", "❓"]
-
-    setReels(newReels)
-
-    const payout = data.payout || 0
-    const isWin = data.is_win
-    const multiplier = data.multiplier || 0
-
-    if (isWin) {
-      sfx.win()
-    } else {
-      sfx.lose()
-    }
-
-    setHistory(prev => [isWin, ...prev].slice(0, 20))
-
-    if (isWin) {
-      setMultiplier(multiplier)
-      setResultText(`🎉 WIN! +${payout}`)
-      setPayout(payout)
-    } else {
-      setResultText("😞 no win... try again")
-    }
-
-    setIsWin(isWin)
-    setPulling(false)
-  }
+  useEffect(() => {
+    AsyncStorage.getItem(RULES_KEY)
+      .then((seen) => {
+        if (!seen) setRulesOpen(true)
+      })
+      .catch(() => {})
+  }, [])
 
   const handleSpin = async () => {
-    if (pulling) return
-    const result = schema.safeParse({ stake });
-    
-    if (!result.success) {
-      const firstIssue = result.error.issues[0];
-
+    if (spinning) return
+    const parsed = schema.safeParse({ stake })
+    if (!parsed.success) {
       return Toast.show({
         type: 'info',
-        text1: firstIssue.message,
-        text2: "Please check your input",
-      });
+        text1: parsed.error.issues[0].message,
+      })
     }
 
-    sfx.flip()
-    setPulling(true)
-
-    // start animation
-    r1.value = withRepeat(withTiming(-10, { duration: 150 }), -1, false)
-    r2.value = withRepeat(withTiming(-10, { duration: 130 }), -1, false)
-    r3.value = withRepeat(withTiming(-10, { duration: 110 }), -1, false)
-
     try {
-      const res = await axiosClient.post("/virtual/reel", {
-        stake: Number(stake)
-      })
+      setSpinning(true)
+      setShowOverlay(false)
+      setIsWin(false)
+      setMessage('')
+      sfx.flip()
+      triggerHaptic('roll')
 
-      const data = res.data.game
-      console.log("API result:", res.data)
+      const started = Date.now()
+      const res = await axiosClient.post('/virtual/reel', { stake: Number(stake) })
+      const data = res.data?.game
+      if (!data) {
+        throw new Error(res.data?.message || 'The reels did not come back. Try again.')
+      }
 
-      // stop reels one by one WITH API result
-      setTimeout(() => stopReel(r1), 700)
-      setTimeout(() => stopReel(r2), 1100)
-      setTimeout(() => stopReel(r3, true, data), 1500)
+      const faces: [string, string, string] = Array.isArray(data.reels)
+        ? [
+            normalizeSlotSymbol(data.reels[0]),
+            normalizeSlotSymbol(data.reels[1]),
+            normalizeSlotSymbol(data.reels[2]),
+          ]
+        : ['🍒', '🍋', '🍊']
+      setReels(faces)
 
+      const wait = reduceMotion ? 0 : Math.max(0, SPIN_MS - (Date.now() - started))
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
+
+      setSpinning(false)
+      if (!reduceMotion) {
+        await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
+      }
+
+      const win = Boolean(data.is_win)
+      const pay = data.payout || 0
+      setIsWin(win)
+      setPayout(pay)
+      setMultiplier(data.multiplier || multiplier)
+      setMessage(res.data.message || (win ? 'Hit' : 'Miss'))
+      setHistory((prev) => [win, ...prev].slice(0, 12))
+
+      if (win) {
+        sfx.win()
+        triggerHaptic('win')
+      } else {
+        sfx.lose()
+        triggerHaptic('lose')
+      }
+
+      setShowOverlay(true)
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+      overlayTimer.current = setTimeout(() => setShowOverlay(false), 1800)
       setFetchWallet(true)
-
-    } catch (error: any) {
+    } catch (error: unknown) {
       sfx.error()
-      
-      cancelAnimation(r1)
-      cancelAnimation(r2)
-      cancelAnimation(r3)
-
-      r1.value = withTiming(0)
-      r2.value = withTiming(0)
-      r3.value = withTiming(0)
-
-      setPulling(false)
-      setResultText("❌ error pulling")
-
+      setSpinning(false)
       Toast.show({
         type: 'error',
-        text1:
-          error?.response?.data?.message?.stake ||
-          error?.response?.data?.message ||
-          "Something went wrong",
+        text1: getApiErrorMessage(error),
       })
     }
   }
 
-  // animated styles
-  const style1 = useAnimatedStyle(() => ({
-    transform: [{ translateY: r1.value }]
-  }))
-
-  const style2 = useAnimatedStyle(() => ({
-    transform: [{ translateY: r2.value }]
-  }))
-
-  const style3 = useAnimatedStyle(() => ({
-    transform: [{ translateY: r3.value }]
-  }))
-
   const goBack = () => {
-    if(fetchWallet){
+    if (fetchWallet) {
       getWallet(false)
-      getUnreadNotifications();
+      getUnreadNotifications()
     }
     router.back()
   }
 
+  const busy = spinning
+
   return (
-    <LinearGradient colors={["#1a0f2b", "#0d061a"]} style={styles.container}>
+    <LinearGradient colors={['#1a050a', '#0d0610']} style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", gap: 20, padding: 12 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between', gap: 16, padding: 12 }}
       >
-
-        {/* HEADER */}
-        <View className='flex-row gap-2 justify-between items-center flex-wrap' style={{ marginTop: top }}>
-          <View className='flex-row gap-1 items-center'>
-            <TouchableOpacity onPress={goBack}>
-              <Feather name="chevron-left" size={34} color="#f6d98a" />
+        <View style={[styles.header, { marginTop: top }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <TouchableOpacity onPress={goBack} accessibilityLabel="Back">
+              <Feather name="chevron-left" size={30} color="#f6d98a" />
             </TouchableOpacity>
-
             <View style={styles.logo}>
-              <Text style={{ fontSize: 18 }}>🎰</Text>
+              <Text>🎰</Text>
             </View>
-
-            <Text style={styles.title}>reel streak</Text>
+            <Text style={styles.title}>Reel streak</Text>
           </View>
-
-          <View style={styles.topStats}>
-            <View>
-              <Text style={styles.small}>PAYOUT</Text>
-              <Text style={styles.gold}>{payout}</Text>
-            </View>
-            <View>
-              <Text style={styles.small}>MULTIPLIER</Text>
-              <Text style={styles.gold}>{multiplier}</Text>
-            </View>
-          </View>
+          <TouchableOpacity onPress={() => setRulesOpen(true)} style={styles.helpBtn} accessibilityLabel="How to play">
+            <Text style={styles.helpText}>?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <GameBalancePill />
         </View>
 
-        {/* REELS */}
-        <View style={styles.reelBox}>
-          <View style={styles.reels}>
-            {[0,1,2].map((i) => {
-              const animStyle = [style1, style2, style3][i]
+        <GameStatsRow
+          stake={stake}
+          onStakeChange={setStake}
+          payout={payout ? displayCurrency(Number(payout)) : '—'}
+          multiplier={multiplier}
+          stakeEditable={!busy}
+        />
 
-              return (
-                <Animated.View key={i} style={[styles.reel, isWin && styles.winReel, animStyle]}>
-                  <Text style={styles.reelEmoji}>{reels[i]}</Text>
-                </Animated.View>
-              )
-            })}
-          </View>
+        <SlotCabinet reels={reels} spinning={spinning} win={isWin} reduceMotion={reduceMotion} />
 
-          <Text style={styles.pullText}>
-            {pulling ? "pulling..." : resultText}
-          </Text>
+        <Text style={styles.hint}>
+          {busy ? 'Reels in motion…' : message ? (isWin ? 'Payline hit' : 'No match on the payline') : 'Three faces. One gold line.'}
+        </Text>
+        <View style={{ height: showOverlay ? 96 : 0, position: 'relative' }}>
+          <RoundResultOverlay
+            visible={showOverlay}
+            isWin={isWin}
+            title={isWin ? 'Payline hit' : 'No match'}
+            detail={isWin ? `+${displayCurrency(Number(payout || 0))}` : reels.join('  ')}
+            reduceMotion={reduceMotion}
+          />
         </View>
 
-        {/* BET + SPIN */}
-        <View style={styles.betRow}>
-          <View style={styles.stakeBox}>
-            <Text style={styles.stakeLabel}>stake</Text>
-            <View style={styles.counterRow}>
-              <TextInput
-                value={stake}
-                onChangeText={(text) => setStake(text)}
-                keyboardType="numeric"
-                placeholder="Enter stake"
-                placeholderTextColor="#9fb7a9"
-                cursorColor="white"
-                style={{
-                  backgroundColor: "#1a1230",
-                  borderRadius:16,
-                  borderWidth: 1,
-                  borderColor: "#d2b48c",
-                  padding: 8,
-                  fontSize: 16,
-                  flex: 1,
-                  color: "#fff",
-                  textAlign: "center"
-                }}
-              />
+        <TouchableOpacity style={[styles.spinBtn, busy && styles.spinBusy]} onPress={handleSpin} disabled={busy}>
+          {busy ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color="#3a0f18" />
+              <Text style={styles.spinText}>SPINNING</Text>
             </View>
-            
-          </View>
+          ) : (
+            <Text style={styles.spinText}>SPIN</Text>
+          )}
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.spinBtn, pulling && { opacity: 0.5 }]}
-            onPress={handleSpin}
-            disabled={pulling}
-          >
-            <Text style={styles.spinText}>🎲 PULL</Text>
-          </TouchableOpacity>
+        <View style={{ marginBottom: bottom }}>
+          <GameHistoryStrip history={history} emptyLabel="Spin to start a streak" />
         </View>
-
-        {/* STATS */}
-        <View style={styles.stats}>
-          <View>
-            <Text style={styles.small}>PAYOUT</Text>
-            <Text style={styles.gold}>{payout}</Text>
-          </View>
-          <View>
-            <Text style={styles.small}>MULTIPLIER</Text>
-            <Text style={styles.gold}>{multiplier}</Text>
-          </View>
-        </View>
-
-        {/* FOOTER */}
-        <View style={[styles.footer, { marginBottom: bottom }]}>
-          <Text style={styles.footerText}>📋 last spins   🔊 sound fx</Text>
-
-          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            {history.length === 0 ? (
-              <Text style={styles.footerHint}>Pull the lever</Text>
-            ) : (
-              history.map((h, i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: h ? '#5fd48c' : '#e06969'
-                  }}
-                >
-                  <Text style={{ color: '#ffeca6' }}>
-                    {h ? '✅' : '❌'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-        </View>
-
       </ScrollView>
+
+      <GameRulesSheet
+        visible={rulesOpen}
+        title="How Reel streak works"
+        steps={REEL_RULES}
+        onClose={() => {
+          setRulesOpen(false)
+          void AsyncStorage.setItem(RULES_KEY, '1')
+        }}
+      />
     </LinearGradient>
   )
 }
@@ -316,198 +237,65 @@ export default ReelStreakScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between",
   },
-
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
   },
-
   logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#6f4bb8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10
-  },
-
-  title: {
-    color: "#e5dcff",
-    fontSize: 20,
-  },
-
-  topStats: {
-    flexDirection: "row",
-    gap: 20,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 12,
-    borderRadius: 20,
-  },
-
-  small: {
-    fontSize: 10,
-    color: "#b9a7e6",
-  },
-
-  gold: {
-    color: "#f6d98a",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-
-  stakeBox: {
-    width: 150,
-    backgroundColor: "#2d214a",
-    borderRadius: 30,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-
-  stakeLabel: {
-    color: "#9fb7c3",
-    marginBottom: 6,
-  },
-
-  counterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6
-  },
-
-  reelBox: {
-    backgroundColor: "#2a1d44",
-    borderRadius: 30,
-    padding: 20,
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 12,
-  },
-
-  reels: {
-    flexDirection: "row",
-    gap: 15,
-  },
-
-  reel: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    backgroundColor: "#eae7df",
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-
-  winReel: {
-    borderWidth: 5,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#6b0000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
     borderColor: '#f6d98a',
-
-    shadowColor: '#ffd700',
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 25,
-
-    backgroundColor: '#fff8e1',
   },
-
-  reelEmoji: {
-    fontSize: 40,
-  },
-
-  pullText: {
-    marginTop: 15,
-    color: "#f6d98a",
+  title: {
+    color: '#f6d98a',
     fontSize: 20,
-    fontWeight: "bold",
-    textAlign: "center"
+    fontWeight: '800',
   },
-
-  betRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  helpBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(246,217,138,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  betBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  betLabel: {
-    color: "#c7bff0",
+  helpText: {
+    color: '#f6d98a',
     fontSize: 18,
+    fontWeight: '800',
   },
-
-  betValueBox: {
-    backgroundColor: "#4c3575",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+  hint: {
+    textAlign: 'center',
+    color: '#e5dcff',
+    fontSize: 15,
   },
-
-  betValue: {
-    color: "#f6d98a",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-
   spinBtn: {
-    backgroundColor: "#a88be0",
+    alignSelf: 'center',
+    minWidth: 180,
+    backgroundColor: '#c41e3a',
     paddingVertical: 16,
-    paddingHorizontal: 30,
-    borderRadius: 30,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10,
+    paddingHorizontal: 36,
+    borderRadius: 40,
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#f6d98a',
   },
-
+  spinBusy: {
+    opacity: 0.7,
+  },
   spinText: {
-    color: "#1b1030",
+    color: '#fff8e1',
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: '900',
+    letterSpacing: 2,
   },
-
-  stats: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    backgroundColor: "#2a1d44",
-    padding: 20,
-    borderRadius: 30,
-  },
-
-  footer: {
-    backgroundColor: "#2a1d44",
-    borderRadius: 30,
-    padding: 20,
-  },
-
-  footerText: {
-    color: '#c7bff0',
-    marginBottom: 10,
-  },
-
-  footerHint: {
-    marginTop: 10,
-    color: '#b9a7e6',
-    fontStyle: 'italic'
-  }
-
 })

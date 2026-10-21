@@ -6,7 +6,7 @@ import { axiosClient } from '@/globalApi';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,9 @@ import { OtpInput } from 'react-native-otp-entry';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLoaderStore } from '@/store/loaderStore';
 import Toast from 'react-native-toast-message';
+import type { IdentifierPayload } from '@/utils/identifier';
+
+const OTP_LENGTH = 6;
 
 export default function ResetPasswordOTP() {
 
@@ -28,8 +31,15 @@ export default function ResetPasswordOTP() {
    const { isLoading, setLoading } = useLoaderStore()
 
   const [otp, setOtp] = useState('')
-  const { phone } = useLocalSearchParams() as any;
-  const parsedPhone = phone ? JSON.parse(phone) : null
+  // { email } or { phone_number }, passed from the Forgot Password screen
+  const { target } = useLocalSearchParams<{ target?: string }>();
+  const resetTarget = useMemo<IdentifierPayload | null>(() => {
+    try {
+      return target ? JSON.parse(target) : null;
+    } catch {
+      return null;
+    }
+  }, [target]);
 
   const [resendLoading, setResendLoading] = useState(false)
   const [resend, setResend] = useState(false)
@@ -39,6 +49,13 @@ export default function ResetPasswordOTP() {
     
     if (isLoading) return
 
+    if (!resetTarget) {
+        return Toast.show({
+            type: 'error',
+            text1: "Start again from Forgot Password",
+        });
+    }
+
     if(!otp){
         return Toast.show({
             type: 'info',
@@ -47,10 +64,10 @@ export default function ResetPasswordOTP() {
         });
     }
 
-    if(otp.length < 4){
+    if (otp.length < OTP_LENGTH) {
         return Toast.show({
             type: 'info',
-            text1: "OTP needs 4 numbers",
+            text1: `OTP needs ${OTP_LENGTH} numbers`,
             text2: "Please check your inputs.",
         });
     }
@@ -60,7 +77,7 @@ export default function ResetPasswordOTP() {
       setLoading(true)
 
       const data = {
-        phone_number: parsedPhone.phone,
+        ...resetTarget,
         verification_code: otp
       }
 
@@ -86,14 +103,12 @@ export default function ResetPasswordOTP() {
 
   const resendOtp = async () => {
 
+    if (!resetTarget) return
+
     setResendLoading(true)
 
     try {
-      const data = {
-        phone_number: parsedPhone.phone,
-      }
-      
-      const result = await axiosClient.post("/auth/forgot-password", data)
+      const result = await axiosClient.post("/auth/forgot-password", resetTarget)
 
       console.log(result.data)
 
@@ -135,11 +150,11 @@ export default function ResetPasswordOTP() {
               {/* Form Card */}
               <View className="bg-charcoal-light rounded-3xl p-6" style={{ marginBottom: bottom + 16 }}>
 
-                <Text className="text-base text-center text-white mt-1 font-mmedium">Enter the 4 digits OTP code sent to your phone number</Text>
+                <Text className="text-base text-center text-white mt-1 font-mmedium">Enter the 6 digits OTP code sent to your {resetTarget && 'email' in resetTarget ? 'email' : 'phone number'}</Text>
                 <View className='mt-7'>
                     <OtpInput
                         key={emailKey}
-                        numberOfDigits={4}
+                        numberOfDigits={OTP_LENGTH}
                         onTextChange={(code) => setOtp(code)}
                         theme={{
                             containerStyle: styles.container,

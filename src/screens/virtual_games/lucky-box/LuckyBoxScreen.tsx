@@ -1,24 +1,29 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, AccessibilityInfo } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import Toast from 'react-native-toast-message'
-import AnimatedBox from '@/components/virtuals/AnimatedBox'
-
-import { z } from "zod"
+import { z } from 'zod'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
 import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import displayCurrency from '@/utils/displayCurrency'
+import { triggerHaptic } from '@/utils/vibration'
+import GameRulesSheet from '@/components/virtuals/GameRulesSheet'
+import RoundResultOverlay from '@/components/virtuals/RoundResultOverlay'
+import GameHistoryStrip from '@/components/virtuals/GameHistoryStrip'
+import GameStatsRow from '@/components/virtuals/GameStatsRow'
+import GiftBox from '@/components/virtuals/GiftBox'
 
 const schema = z.object({
-  stake: z.coerce.number()
-    .min(50, "Minimum stake is 50")
-    .max(1000, "Maximum stake is 1000"),
-  pick: z.number()
+  stake: z.coerce.number().min(50, 'Minimum stake is 50').max(1000, 'Maximum stake is 1000'),
+  pick: z.number().min(1).max(3),
 })
 
 type Box = {
@@ -35,288 +40,267 @@ type Result = {
   userPick: number | null
 }
 
+const RULES_KEY = 'plusergame.rules.box.v1'
+const OPEN_MS = 650
+
+const BOX_RULES = [
+  'Three closed boxes. The prize is in one of them.',
+  'Your stake is taken when you tap a box. That lid opens first.',
+  'The other two open after, so you can see where the prize sat.',
+  'Stake ₦50–₦1,000. A hit pays the multiplier shown into your wallet.',
+]
+
+const emptyBoxes = (): Box[] =>
+  Array.from({ length: 3 }, () => ({ revealed: false, prize: false }))
+
 const LuckyBoxScreen = () => {
   const { top, bottom } = useSafeAreaInsets()
-  const [stake, setStake] = useState("50")
-  const [boxCount, setBoxCount] = useState(3)
-  const [boxes, setBoxes] = useState<Box[]>([])
+  const sfx = useSfx()
+  const [stake, setStake] = useState('50')
+  const [boxes, setBoxes] = useState<Box[]>(emptyBoxes)
+  const [picking, setPicking] = useState<number | null>(null)
   const [gameActive, setGameActive] = useState(true)
-  const [resultText, setResultText] = useState("🎁 pick a box")
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<Result>({
     isWin: false,
-    message: "",
+    message: '',
     payout: 0,
-    multiplier: "2.5x",
+    multiplier: '2.5x',
     systemPick: null,
-    userPick: null
+    userPick: null,
   })
   const [history, setHistory] = useState<boolean[]>([])
   const [fetchWallet, setFetchWallet] = useState(false)
-  const sfx = useSfx()
-
-  // INIT EMPTY BOXES
-  const initBoxes = (count: number) => {
-    const newBoxes = Array.from({ length: count }, () => ({
-      revealed: false,
-      prize: false
-    }))
-
-    setBoxes(newBoxes)
-    setGameActive(true)
-  }
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
-    initBoxes(3)
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+    }
   }, [])
 
-  // PLAY
+  useEffect(() => {
+    AsyncStorage.getItem(RULES_KEY)
+      .then((seen) => {
+        if (!seen) setRulesOpen(true)
+      })
+      .catch(() => {})
+  }, [])
+
   const handlePick = async (index: number) => {
     if (!gameActive || loading) return
 
-    const result = schema.safeParse({ stake, pick: index + 1 });
-      
-    if (!result.success) {
-      const firstIssue = result.error.issues[0];
-
+    const parsed = schema.safeParse({ stake, pick: index + 1 })
+    if (!parsed.success) {
       return Toast.show({
         type: 'info',
-        text1: firstIssue.message,
-      });
+        text1: parsed.error.issues[0].message,
+      })
     }
-
-    sfx.flip()
 
     try {
       setLoading(true)
+      setPicking(index)
+      setShowOverlay(false)
+      sfx.flip()
+      triggerHaptic('roll')
 
+      const started = Date.now()
       const res = await axiosClient.post('/virtual/box', {
         pick: index + 1,
-        stake: Number(stake)
+        stake: Number(stake),
       })
 
       const data = res.data
-      console.log("box data:", data)
-
-      const correct: boolean = data.game.is_win
- 
-      //outcome sound
-      if (correct) {
-        sfx.win()
-      } else {
-        sfx.lose()
+      const game = data?.game
+      if (!game) {
+        throw new Error(data?.message || 'The boxes did not come back. Try again.')
       }
 
-      const systemPickIndex = data.game.system_pick - 1 // if backend is 1-based
-      const userPickIndex = data.game.user_picked - 1
+      const wait = reduceMotion ? 0 : Math.max(0, OPEN_MS - (Date.now() - started))
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
 
-      const updatedBoxes = Array.from({ length: boxCount }, (_, i) => ({
-        revealed: true,
-        prize: i === systemPickIndex
-      }))
+      const correct = Boolean(game.is_win)
+      const prizeIndex = Number(game.system_pick) - 1
 
-      setBoxes(updatedBoxes)
+      setBoxes((prev) =>
+        prev.map((box, i) =>
+          i === index ? { revealed: true, prize: index === prizeIndex } : box,
+        ),
+      )
 
+      if (!reduceMotion) {
+        await new Promise((resolve) => setTimeout(resolve, 380))
+      }
+
+      setBoxes(
+        Array.from({ length: 3 }, (_, i) => ({
+          revealed: true,
+          prize: i === prizeIndex,
+        })),
+      )
       setGameActive(false)
-      setHistory(prev => [correct, ...prev].slice(0, 20))
+      setPicking(null)
+      setHistory((prev) => [correct, ...prev].slice(0, 12))
       setResult({
         isWin: correct,
         message: data.message,
-        payout: data.game.payout || 0,
-        multiplier: data.game.multiplier,
-        systemPick: data.game.system_pick,
-        userPick: data.game.user_picked
+        payout: game.payout || 0,
+        multiplier: game.multiplier,
+        systemPick: game.system_pick,
+        userPick: game.user_picked,
       })
 
-      if (data.game.is_win) {
-        setResultText(`💰 WIN! +${data.game.payout}`)
+      if (correct) {
+        sfx.win()
+        triggerHaptic('win')
       } else {
-        setResultText(`😞 LOSE... -${stake}`)
+        sfx.lose()
+        triggerHaptic('lose')
       }
 
+      if (!reduceMotion) {
+        await new Promise((resolve) => setTimeout(resolve, 420))
+      }
+      setShowOverlay(true)
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+      overlayTimer.current = setTimeout(() => setShowOverlay(false), 1800)
       setFetchWallet(true)
-
-    } catch (error: any) {
+    } catch (error: unknown) {
       sfx.error()
+      setPicking(null)
       Toast.show({
         type: 'error',
-        text1:
-          error?.response?.data?.message?.stake ||
-          error?.response?.data?.message ||
-          "Something went wrong",
+        text1: getApiErrorMessage(error),
       })
     } finally {
       setLoading(false)
+      setPicking(null)
     }
   }
 
-  //  NEW ROUND
   const newRound = () => {
     if (loading) return
     sfx.next()
-
-    initBoxes(boxCount)
-    setResultText("🎁 pick a box")
+    setBoxes(emptyBoxes())
     setGameActive(true)
+    setShowOverlay(false)
+    setResult((prev) => ({ ...prev, message: '', payout: 0, systemPick: null, userPick: null }))
   }
 
   const goBack = () => {
-    if(fetchWallet){
+    if (fetchWallet) {
       getWallet(false)
-      getUnreadNotifications();
+      getUnreadNotifications()
     }
     router.back()
   }
 
+  const hint = loading
+    ? 'Lids are lifting…'
+    : gameActive
+      ? 'Tap a box. One holds the prize.'
+      : result.isWin
+        ? `Win · box ${result.systemPick}`
+        : `Miss · prize was box ${result.systemPick}`
+
   return (
-    <LinearGradient
-      colors={["#1a0f2b", "#0d061a"]}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#1a0f2b', '#0d061a']} style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", gap: 20, padding: 12 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between', gap: 16, padding: 12 }}
       >
-        {/* HEADER */}
-        <View className='flex-row gap-2 justify-between items-center flex-wrap' style={{ marginTop: top }}>
-          <View className='flex-row gap-1 items-center'>
-            <TouchableOpacity activeOpacity={0.8} onPress={goBack}>
-              <Feather name="chevron-left" size={34} color="#d2b48c" />
-            </TouchableOpacity> 
-
+        <View style={[styles.headerRow, { marginTop: top }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <TouchableOpacity onPress={goBack} accessibilityLabel="Back">
+              <Feather name="chevron-left" size={30} color="#d2b48c" />
+            </TouchableOpacity>
             <View style={styles.logo}>
-              <Text style={{ fontSize: 20 }}>🎁</Text>
+              <Text>🎁</Text>
             </View>
-            <Text style={styles.title}>lucky box</Text>
+            <Text style={styles.title}>Lucky box</Text>
           </View>
-
-          <View style={styles.balanceBox}>
-            <Text style={styles.small}>PAYOUT</Text>
-            <Text style={styles.gold}>{result?.payout}</Text>
-          </View>
+          <TouchableOpacity onPress={() => setRulesOpen(true)} style={styles.helpBtn} accessibilityLabel="How to play">
+            <Text style={styles.helpText}>?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <GameBalancePill />
         </View>
 
-        {/* STAKE + MULTIPLIER */}
-        <View style={styles.row}>
-          <View style={styles.stakeBox}>
-            <Text style={styles.stakeLabel}>stake</Text>
-            <View style={styles.counterRow}>
-              <TextInput
-                value={stake}
-                onChangeText={(text) => setStake(text)}
-                keyboardType="numeric"
-                placeholder="Enter stake"
-                placeholderTextColor="#9fb7a9"
-                cursorColor="white"
-                style={{
-                  backgroundColor: "#1a1230",
-                  borderRadius:16,
-                  borderWidth: 1,
-                  borderColor: "#d2b48c",
-                  padding: 8,
-                  fontSize: 16,
-                  flex: 1,
-                  color: "#fff",
-                  textAlign: "center"
-                }}
+        <GameStatsRow
+          stake={stake}
+          onStakeChange={setStake}
+          payout={result.payout ? displayCurrency(Number(result.payout)) : '—'}
+          multiplier={result.multiplier || '—'}
+          stakeEditable={gameActive && !loading}
+        />
+
+        <View style={styles.stage}>
+          <View style={styles.boxRow}>
+            {boxes.map((box, i) => (
+              <GiftBox
+                key={i}
+                index={i}
+                revealed={box.revealed}
+                prize={box.prize}
+                shaking={picking === i}
+                disabled={!gameActive || loading}
+                reduceMotion={reduceMotion}
+                onPress={handlePick}
               />
-            </View>
-            
-          </View>
-
-          <View style={styles.multiplierBtn}>
-            <Text style={styles.multiplierText}>{result?.multiplier}</Text>
+            ))}
           </View>
         </View>
 
-        {/* BOX OPTIONS */}
-        {/* <View style={styles.optionRow}>
-          <TouchableOpacity style={styles.optionBtn} 
-            onPress={() => {
-              setBoxCount(3)
-              initBoxes(3)   // use value directly
-              setResultText("🎁 pick a box")
-            }}
-          >
-            <Text>3 boxes</Text>
+        <Text style={styles.hint}>{hint}</Text>
+        <View style={{ height: showOverlay ? 96 : 0, position: 'relative' }}>
+          <RoundResultOverlay
+            visible={showOverlay}
+            isWin={result.isWin}
+            title={result.isWin ? 'That was the prize' : 'Empty box'}
+            detail={
+              result.isWin
+                ? `+${displayCurrency(Number(result.payout || 0))}`
+                : `It was box ${result.systemPick}`
+            }
+            reduceMotion={reduceMotion}
+          />
+        </View>
+
+        {!gameActive ? (
+          <TouchableOpacity style={styles.openBtn} disabled={loading} onPress={newRound}>
+            <Text style={styles.openText}>NEW BOXES</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.optionBtn} 
-            onPress={() => {
-              setBoxCount(5)
-              initBoxes(5)   // use value directly
-              setResultText("🎁 pick a box")
-            }}
-          >
-            <Text>5 boxes</Text>
-          </TouchableOpacity>
-        </View> */}
-
-        {/* BOXES */}
-        <View style={styles.boxRow}>
-          {boxes.map((box, i) => (
-            <AnimatedBox
-              key={i}
-              box={box}
-              index={i}
-              onPress={handlePick}
-              disabled={!gameActive}
-              loading={loading}
-            />
-          ))}
-        </View>
-
-        {/* PICK BAR */}
-        <View style={styles.pickBar}>
-          {loading ? (
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <ActivityIndicator size={"small"} color="#fff" />
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#fff" }}>Loading...</Text>
-            </View>
-          ) : (
-            <Text style={styles.pickText}>{resultText}</Text>
-          )}
-          <View style={styles.multiplierResult}>
-            <Text style={styles.multiplierResultText}>{result?.multiplier}</Text>
+        ) : loading ? (
+          <View style={styles.openBtn}>
+            <ActivityIndicator color="#1a0f2b" />
           </View>
-        </View>
+        ) : null}
 
-        {/* ACTION BUTTON */}
-        <TouchableOpacity style={styles.openBtn} className={`${gameActive ? 'opacity-60' : ''}`} disabled={gameActive} onPress={newRound}>
-          <Text style={styles.openText}>✨ open new boxes</Text>
-        </TouchableOpacity>
-
-        {/* FOOTER */}
-        <View style={[styles.footer, { marginBottom: bottom }]}>
-          <Text style={styles.footerText}>📋 last picks   🔊 sound on</Text>
-          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            {history.length === 0 ? (
-              <Text style={styles.footerHint}>pick a box</Text>
-            ) : (
-              history.map((h, i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: h ? '#5fd48c' : '#e06969'
-                  }}
-                >
-                  <Text style={{ color: '#ffeca6' }}>
-                    {h ? '✅' : '❌'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
+        <View style={{ marginBottom: bottom }}>
+          <GameHistoryStrip history={history} emptyLabel="Open a box to start a streak" />
         </View>
       </ScrollView>
+
+      <GameRulesSheet
+        visible={rulesOpen}
+        title="How Lucky box works"
+        steps={BOX_RULES}
+        onClose={() => {
+          setRulesOpen(false)
+          void AsyncStorage.setItem(RULES_KEY, '1')
+        }}
+      />
     </LinearGradient>
   )
 }
@@ -326,199 +310,71 @@ export default LuckyBoxScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'space-between'
   },
-
-  header: {
+  headerRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'space-between'
+    gap: 8,
   },
-
   logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#6c4bb8',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10
   },
-
   title: {
     color: '#e5dcff',
-    fontSize: 20
+    fontSize: 20,
+    fontWeight: '700',
   },
-
-  balanceBox: {
-    backgroundColor: '#2d214a',
-    padding: 14,
-    borderRadius: 14
+  helpBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(210,180,140,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  small: {
-    fontSize: 10,
-    color: '#b9a7e6'
-  },
-
-  gold: {
+  helpText: {
     color: '#f6d98a',
     fontSize: 18,
-    fontWeight: 'bold'
+    fontWeight: '800',
   },
-
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-
-  stakeBox: {
-    width: 150,
-    backgroundColor: "#2d214a",
-    borderRadius: 30,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-
-  stakeLabel: {
-    color: "#9fb7c3",
-    marginBottom: 6,
-  },
-
-  stakeValueBox: {
-    backgroundColor: '#1a1230',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20
-  },
-
-  stakeValue: {
-    color: '#f6d98a',
-    fontWeight: 'bold'
-  },
-
-  multiplierBtn: {
-    backgroundColor: '#b18cff',
-    paddingHorizontal: 25,
+  stage: {
+    minHeight: 188,
+    justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 20
+    overflow: 'visible',
   },
-
-  multiplierText: {
-    fontWeight: 'bold',
-    fontSize: 18
-  },
-
-  optionRow: {
-    flexDirection: 'row',
-    gap: 15,
-    justifyContent: 'flex-end'
-  },
-
-  optionBtn: {
-    backgroundColor: '#6b56a5',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20
-  },
-
   boxRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 10
-  },
-
-  box: {
-    width: 110,
-    height: 140,
-    borderRadius: 25,
-    backgroundColor: '#d2b48c',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-
-  boxEmoji: {
-    fontSize: 40
-  },
-
-  boxNumber: {
-    marginTop: 10,
-    backgroundColor: '#3b2b5a',
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    borderRadius: 15
-  },
-
-  boxNumberText: {
-    color: '#fff'
-  },
-
-  pickBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: "wrap",
     gap: 8,
-    backgroundColor: '#2d214a',
-    padding: 20,
-    borderRadius: 30
   },
-
-  pickText: {
-    color: '#e5dcff',
-    fontSize: 18,
-    fontWeight: '700'
-  },
-
-  multiplierResult: {
-    backgroundColor: '#f6d98a',
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    alignItems: 'center',
-     justifyContent: 'center'
-  },
-
-  multiplierResultText: {
-    fontWeight: 'bold'
-  },
-
-  openBtn: {
-    backgroundColor: '#b18cff',
-    padding: 20,
-    borderRadius: 30,
-    alignItems: 'center'
-  },
-
-  openText: {
-    fontSize: 20,
-    fontWeight: 'bold'
-  },
-
-  footer: {
-    backgroundColor: '#2d214a',
-    padding: 20,
-    borderRadius: 30
-  },
-
-  footerText: {
+  hint: {
+    textAlign: 'center',
     color: '#c7bff0',
-    marginBottom: 10,
+    fontSize: 15,
   },
-
-  footerHint: {
-    marginTop: 10,
-    color: '#b9a7e6',
-    fontStyle: 'italic'
+  openBtn: {
+    backgroundColor: '#e3a843',
+    padding: 18,
+    borderRadius: 30,
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 220,
   },
-
-  counterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6
+  openBusy: {
+    opacity: 0.55,
+  },
+  openText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1a0f2b',
+    letterSpacing: 0.4,
   },
 })

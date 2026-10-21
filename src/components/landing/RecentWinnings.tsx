@@ -1,244 +1,506 @@
+import { axiosClient } from '@/globalApi';
+import { useAuthStore } from '@/store/AuthStore';
+import { useProfileStore } from '@/store/ProfileStore';
+import displayCurrency from '@/utils/displayCurrency';
 import { FontAwesome5 } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { useFocusEffect, useIsFocused } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  withDelay,
-  withSequence,
-  withRepeat,
   Easing,
+  interpolate,
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
 
-const ITEM_HEIGHT = 64;
-const SCROLL_INTERVAL = 2000;
-const SCROLL_DURATION = 500;
-const VISIBLE_ITEMS = 3;
+const ITEM_HEIGHT = 68;
+const HOLD_MS = 2600;
+const SLIDE_MS = 420;
+const SPARKLE_ANGLES = [20, 80, 140, 200, 260, 320].map((deg) => (deg * Math.PI) / 180);
 
-const winners = [
-  { id: '1', name: 'RiskyMines', phone: '+23478563****', bet: '₦200', won: '₦4,500' },
-  { id: '2', name: 'SilverWest', phone: '+23478563****', bet: '₦200', won: '₦1,300' },
-  { id: '3', name: 'Johnny',     phone: '+23478563****', bet: '₦100', won: '₦1,600' },
-  { id: '4', name: 'GoldRush99', phone: '+23471234****', bet: '₦500', won: '₦8,200' },
-  { id: '5', name: 'LuckyAce',   phone: '+23479876****', bet: '₦150', won: '₦2,750' },
-];
+type Winner = {
+  id: string;
+  name: string;
+  phone: string;
+  bet: string;
+  won: string;
+  payout: number;
+};
 
-const DOUBLED = [...winners, ...winners];
-
-const SPARK_POSITIONS = [
-  { angle: 0,   radius: 28, size: 16 },
-  { angle: 72,  radius: 28, size: 18 },
-  { angle: 144, radius: 28, size: 16 },
-  { angle: 216, radius: 28, size: 18 },
-  { angle: 288, radius: 28, size: 16 },
-  { angle: 36,  radius: 46, size: 24 },
-  { angle: 108, radius: 46, size: 28 },
-  { angle: 180, radius: 46, size: 22 },
-  { angle: 252, radius: 46, size: 26 },
-  { angle: 324, radius: 46, size: 24 },
-];
-
-// ─── Spark ────────────────────────────────────────────────────────────────────
-function Spark({ delay, angle, radius, size }: { delay: number; angle: number; radius: number; size: number }) {
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
-
-  const rad = (angle * Math.PI) / 180;
-  const x = radius * Math.cos(rad);
-  const y = radius * Math.sin(rad);
-
-  useEffect(() => {
-    const loop = () => {
-      scale.value = 0;
-      opacity.value = 0;
-      opacity.value = withDelay(
-        delay,
-        withSequence(
-          withTiming(1, { duration: 180 }),
-          withTiming(0, { duration: 520, easing: Easing.out(Easing.ease) }),
-        ),
-      );
-      scale.value = withDelay(delay, withSpring(1, { damping: 4, stiffness: 120 }));
-    };
-    loop();
-    const interval = setInterval(loop, SCROLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.Text
-      style={[{ position: 'absolute', fontSize: size, left: 60 + x - size / 2, top: 60 + y - size / 2 },
-        animStyle,
-      ]}
-    >
-      ✨
-    </Animated.Text>
-  );
+function maskPhone(raw: string) {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 7) return raw || '';
+  return `+${digits.slice(0, 6)}****`;
 }
 
-// ─── AnimatedCup ──────────────────────────────────────────────────────────────
-function AnimatedCup() {
-  const translateY = useSharedValue(0);
-  const rotate = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(-5, { duration: 480, easing: Easing.inOut(Easing.sin) }),
-        withTiming(5, { duration: 480, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      true,
-    );
-    rotate.value = withRepeat(
-      withSequence(
-        withTiming(-0.15, { duration: 400, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.15, { duration: 400, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-    scale.value = withRepeat(
-      withSequence(
-        withTiming(1.15, { duration: 550, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 550, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 600 }),
-        withTiming(1, { duration: 400 }),
-        withTiming(0, { duration: 200, easing: Easing.in(Easing.ease) }),
-        withTiming(0, { duration: 300 }),
-        withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, []);
-
-  const cupStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { rotate: `${rotate.value}rad` },
-      { scale: scale.value },
-    ],
-    opacity: opacity.value,
-  }));
+function WinnerRow({ item }: { item: Winner }) {
+  const isBigWin = item.payout >= 5000;
 
   return (
-    <Animated.Text style={[{ fontSize: 12 }, cupStyle]}>🏆</Animated.Text>
-  );
-}
-
-// ─── SparkBurst ───────────────────────────────────────────────────────────────
-function SparkBurst() {
-  const BURST_SIZE = 120;
-  return (
-    <View
-      style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}
-      pointerEvents="none"
-    >
-      <View style={{ width: BURST_SIZE, height: BURST_SIZE }}>
-        {SPARK_POSITIONS.map((pos, i) => (
-          <Spark key={i} angle={pos.angle} radius={pos.radius} size={pos.size} delay={i * 60} />
-        ))}
-        <View style={{ position: 'absolute', top: 60 - 12, left: 60 - 12, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-          <AnimatedCup />
+    <View style={styles.row}>
+      <View style={[styles.avatar, isBigWin && styles.avatarGold]}>
+        <FontAwesome5 name="user-alt" size={13} color={isBigWin ? '#D4AF37' : '#9A2121'} />
+      </View>
+      <View style={styles.meta}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {isBigWin ? <Text style={styles.cup}>🏆</Text> : null}
         </View>
+        {item.phone ? <Text style={styles.phone}>{item.phone}</Text> : null}
       </View>
-    </View>
-  );
-}
-
-// ─── WinnerRow ────────────────────────────────────────────────────────────────
-function WinnerRow({ item, compact }: { item: typeof winners[number]; compact: boolean }) {
-  const wonAmount = parseInt(item.won.replace(/[₦,]/g, ''), 10);
-  const isBigWin = wonAmount >= 5000;
-
-  return (
-    <View
-      className={`relative flex-row items-center gap-3 ${!compact && 'border-b border-charcoal'}`}
-      style={{ height: ITEM_HEIGHT, overflow: 'visible' }}
-    >
-      <View className="w-10 h-10 rounded-full border border-charcoal items-center justify-center">
-        <FontAwesome5 name="user-alt" size={14} color="#9A2121" />
-      </View>
-      <View className="flex-1">
-        <Text className="text-white text-sm font-mmedium">{item.name}</Text>
-        <Text className="text-gray text-xs mt-0.5">{item.phone}</Text>
-      </View>
-      {isBigWin && <SparkBurst />}
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text className="text-gray text-xs">Bet Placed: {item.bet}</Text>
-        <Text className="text-gray text-sm font-mmedium mt-0.5">
-          Won: <Text className="text-yellow">{item.won}</Text>
+      <View style={styles.amounts}>
+        <Text style={styles.bet}>Bet Placed: {item.bet}</Text>
+        <Text style={styles.wonLabel}>
+          Won: <Text style={styles.won}>{item.won}</Text>
         </Text>
       </View>
     </View>
   );
 }
 
-// ─── RecentWinnings ───────────────────────────────────────────────────────────
-// compact=true → shows only 1 row (for sticky header); compact=false → shows 3 rows (default)
-export default function RecentWinnings({ compact = false }: { compact?: boolean }) {
-  const visibleRows = compact ? 1 : VISIBLE_ITEMS;
-  const translateY = useSharedValue(0);
-  const currentIndex = { value: 0 };
+function Sparkle({ progress, angle, color }: { progress: Animated.SharedValue<number>; angle: number; color: string }) {
+  const style = useAnimatedStyle(() => {
+    const distance = interpolate(progress.value, [0, 1], [8, 52]);
+    return {
+      opacity: interpolate(progress.value, [0, 0.15, 0.7, 1], [0, 1, 0.7, 0]),
+      transform: [
+        { translateX: Math.cos(angle) * distance },
+        { translateY: Math.sin(angle) * distance },
+        { scale: interpolate(progress.value, [0, 0.35, 1], [0.4, 1, 0.2]) },
+      ],
+    };
+  });
+
+  return <Animated.View pointerEvents="none" style={[styles.sparkle, { backgroundColor: color }, style]} />;
+}
+
+function CrownSplash({ burst }: { burst: number }) {
+  const crownScale = useSharedValue(0.2);
+  const crownOpacity = useSharedValue(0);
+  const crownRotate = useSharedValue(-18);
+  const ringScale = useSharedValue(0.3);
+  const ringOpacity = useSharedValue(0);
+  const sparkleProgress = useSharedValue(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      currentIndex.value += 1;
+    if (burst <= 0) return;
 
-      if (currentIndex.value >= winners.length) {
-        currentIndex.value = 0;
-        translateY.value = 0;
-        return;
+    cancelAnimation(crownScale);
+    cancelAnimation(crownOpacity);
+    cancelAnimation(crownRotate);
+    cancelAnimation(ringScale);
+    cancelAnimation(ringOpacity);
+    cancelAnimation(sparkleProgress);
+
+    crownOpacity.value = 1;
+    crownScale.value = 0.15;
+    crownRotate.value = -22;
+    ringScale.value = 0.25;
+    ringOpacity.value = 0.9;
+    sparkleProgress.value = 0;
+
+    crownScale.value = withSequence(
+      withTiming(1.28, { duration: 320, easing: Easing.out(Easing.back(1.6)) }),
+      withTiming(1, { duration: 160 }),
+      withDelay(380, withTiming(0.7, { duration: 220 })),
+    );
+    crownRotate.value = withSequence(
+      withTiming(8, { duration: 280, easing: Easing.out(Easing.cubic) }),
+      withTiming(0, { duration: 180 }),
+    );
+    crownOpacity.value = withSequence(
+      withTiming(1, { duration: 80 }),
+      withDelay(720, withTiming(0, { duration: 260 })),
+    );
+    ringScale.value = withTiming(1.85, { duration: 720, easing: Easing.out(Easing.cubic) });
+    ringOpacity.value = withTiming(0, { duration: 720 });
+    sparkleProgress.value = withTiming(1, { duration: 820, easing: Easing.out(Easing.cubic) });
+  }, [burst, crownOpacity, crownRotate, crownScale, ringOpacity, ringScale, sparkleProgress]);
+
+  const crownStyle = useAnimatedStyle(() => ({
+    opacity: crownOpacity.value,
+    transform: [{ scale: crownScale.value }, { rotate: `${crownRotate.value}deg` }],
+  }));
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ringOpacity.value,
+    transform: [{ scale: ringScale.value }],
+  }));
+
+  return (
+    <View pointerEvents="none" style={styles.splashLayer}>
+      <Animated.View style={[styles.ring, ringStyle]} />
+      {SPARKLE_ANGLES.map((angle, index) => (
+        <Sparkle
+          key={angle}
+          progress={sparkleProgress}
+          angle={angle}
+          color={index % 2 === 0 ? '#D4AF37' : '#FFD76A'}
+        />
+      ))}
+      <Animated.View style={crownStyle}>
+        <FontAwesome5 name="crown" size={28} color="#D4AF37" />
+      </Animated.View>
+    </View>
+  );
+}
+
+type RecentWinningsProps = {
+  compact?: boolean;
+  paused?: boolean;
+  refreshKey?: number;
+};
+
+function LiveDot({ reduceMotion }: { reduceMotion: boolean }) {
+  const opacity = useSharedValue(1)
+
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.value = 1
+      return
+    }
+    opacity.value = withRepeat(withTiming(0.25, { duration: 800, easing: Easing.inOut(Easing.quad) }), -1, true)
+    return () => {
+      cancelAnimation(opacity)
+    }
+  }, [opacity, reduceMotion])
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }))
+
+  return (
+    <View style={styles.live}>
+      <Animated.View style={[styles.liveDot, style]} />
+      <Text style={styles.liveText}>LIVE</Text>
+    </View>
+  )
+}
+
+export default function RecentWinnings({ compact = false, paused = false, refreshKey = 0 }: RecentWinningsProps) {
+  const visibleRows = compact ? 2 : 3;
+  const translateY = useSharedValue(0);
+  const indexRef = useRef(0);
+  const winnersRef = useRef<Winner[]>([]);
+  const [burst, setBurst] = useState(0);
+  const [winners, setWinners] = useState<Winner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const isFocused = useIsFocused();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userProfile = useProfileStore((state) => state.userProfile);
+  const shouldAnimate = isFocused && !paused && winners.length > 1;
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+    }
+  }, [])
+
+  const loadWinnings = useCallback(async () => {
+    if (!isAuthenticated) {
+      setWinners([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const result = await axiosClient.get('/virtual/history?limit=20&page=1');
+      const histories = result.data.histories || [];
+      const name = userProfile.fullName?.trim() || 'You';
+      const phone = maskPhone(userProfile.phoneNumber || '');
+      const mapped: Winner[] = histories
+        .filter((item: { is_win?: boolean }) => item.is_win)
+        .map((item: { id: string; stake: number; payout: number }) => ({
+          id: item.id,
+          name,
+          phone,
+          bet: displayCurrency(Number(item.stake)),
+          won: displayCurrency(Number(item.payout)),
+          payout: Number(item.payout) || 0,
+        }));
+      setWinners(mapped);
+    } catch {
+      setWinners([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, userProfile.fullName, userProfile.phoneNumber]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadWinnings();
+    }, [loadWinnings, refreshKey]),
+  );
+
+  useEffect(() => {
+    winnersRef.current = winners;
+  }, [winners]);
+
+  useEffect(() => {
+    if (!shouldAnimate) {
+      cancelAnimation(translateY);
+      translateY.value = 0;
+      indexRef.current = 0;
+      return;
+    }
+
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let reduceMotion = false;
+
+    const resetLoop = () => {
+      indexRef.current = 0;
+      translateY.value = 0;
+    };
+
+    const celebrate = (nextIndex: number) => {
+      const list = winnersRef.current;
+      if (!list.length) return;
+      const item = list[nextIndex % list.length];
+      if (item.payout >= 4000 || nextIndex % 2 === 0) {
+        setBurst((n) => n + 1);
       }
+    };
 
-      translateY.value = withTiming(-(currentIndex.value * ITEM_HEIGHT), {
-        duration: SCROLL_DURATION,
-        easing: Easing.inOut(Easing.ease),
+    const step = () => {
+      if (reduceMotion) return;
+      const list = winnersRef.current;
+      if (list.length < 2) return;
+      const next = indexRef.current + 1;
+      indexRef.current = next;
+      translateY.value = withTiming(
+        -next * ITEM_HEIGHT,
+        { duration: SLIDE_MS, easing: Easing.out(Easing.cubic) },
+        (finished) => {
+          if (!finished) return;
+          runOnJS(celebrate)(next % list.length);
+          if (next >= list.length) {
+            runOnJS(resetLoop)();
+          }
+        },
+      );
+    };
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (cancelled) return;
+        reduceMotion = enabled;
+        if (!enabled) {
+          interval = setInterval(step, HOLD_MS);
+          setTimeout(() => {
+            if (!cancelled) setBurst((n) => n + 1);
+          }, 700);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        interval = setInterval(step, HOLD_MS);
+        setTimeout(() => {
+          if (!cancelled) setBurst((n) => n + 1);
+        }, 700);
       });
-    }, SCROLL_INTERVAL);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+      cancelAnimation(translateY);
+    };
+  }, [shouldAnimate, translateY, winners.length]);
 
-  const animStyle = useAnimatedStyle(() => ({
+  const trackStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
   }));
 
+  const loop = winners.length > 1 ? [...winners, winners[0]] : winners;
+
   return (
     <View>
-      <View className="flex-row items-center gap-1 my-3">
-        <Text className="text-sm">🏆</Text>
-        <Text className="text-white text-sm font-msbold tracking-widest">
-          RECENT WINNINGS
-        </Text>
+      <View style={styles.header}>
+        <Text style={styles.headerIcon}>🏆</Text>
+        <Text style={styles.headerTitle}>RECENT WINNINGS</Text>
+        {winners.length > 0 ? <LiveDot reduceMotion={reduceMotion} /> : null}
       </View>
 
-      <View
-        className="bg-charcoal-light rounded-xl px-4"
-        style={{ height: ITEM_HEIGHT * visibleRows, overflow: 'hidden' }}
-      >
-        <Animated.View style={animStyle}>
-          {DOUBLED.map((item, index) => (
-            <WinnerRow key={`${item.id}-${index}`} item={item} compact={compact}/>
-          ))}
-        </Animated.View>
+      <View style={[styles.viewport, { height: ITEM_HEIGHT * visibleRows }]}>
+        {loading ? (
+          <View style={styles.empty}>
+            <ActivityIndicator color="#D4AF37" />
+          </View>
+        ) : winners.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>
+              {isAuthenticated ? 'No wins yet' : 'Real results only'}
+            </Text>
+            <Text style={styles.emptyCopy}>
+              {isAuthenticated
+                ? 'Play a virtual game. Wins are paid to your wallet and listed here.'
+                : 'Log in to play. Stakes debit your wallet — this list is not a promo feed.'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Animated.View style={trackStyle}>
+              {loop.map((item, index) => (
+                <WinnerRow key={`${item.id}-${index}`} item={item} />
+              ))}
+            </Animated.View>
+            {shouldAnimate ? <CrownSplash burst={burst} /> : null}
+          </>
+        )}
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 12,
+  },
+  headerIcon: {
+    fontSize: 13,
+  },
+  headerTitle: {
+    color: '#D4AF37',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+  },
+  live: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 4,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#9A2121',
+  },
+  liveText: {
+    color: '#9A2121',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  viewport: {
+    backgroundColor: '#1B1F27',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.28)',
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  emptyTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptyCopy: {
+    color: '#9AA0A6',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  splashLayer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(212,175,55,0.85)',
+  },
+  sparkle: {
+    position: 'absolute',
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  row: {
+    height: ITEM_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: '#2A303A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#12151C',
+  },
+  avatarGold: {
+    borderColor: 'rgba(212,175,55,0.7)',
+  },
+  meta: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  name: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  cup: {
+    fontSize: 11,
+  },
+  phone: {
+    color: '#9AA0A6',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  amounts: {
+    alignItems: 'flex-end',
+  },
+  bet: {
+    color: '#9AA0A6',
+    fontSize: 11,
+  },
+  wonLabel: {
+    color: '#9AA0A6',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  won: {
+    color: '#D4AF37',
+  },
+});

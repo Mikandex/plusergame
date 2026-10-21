@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator, Modal, TouchableWithoutFeedback } from 'react-native'
-import React, { useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, AccessibilityInfo } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
@@ -11,477 +11,410 @@ import getWallet from '@/utils/WalletApi'
 import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import displayCurrency from '@/utils/displayCurrency'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { triggerHaptic } from '@/utils/vibration'
+import GameRulesSheet from '@/components/virtuals/GameRulesSheet'
+import RoundResultOverlay from '@/components/virtuals/RoundResultOverlay'
+import GameHistoryStrip from '@/components/virtuals/GameHistoryStrip'
+import GameStatsRow from '@/components/virtuals/GameStatsRow'
+import LotteryBall from '@/components/virtuals/LotteryBall'
+import LotteryMachine from '@/components/virtuals/LotteryMachine'
+
+const MAX_PICKS = 5
+const RULES_KEY = 'plusergame.rules.lottery.v1'
+const HOPPER_MS = 1100
+const BALL_MS = 320
+
+const LOTTERY_RULES = [
+  'Pick exactly five numbers from 1 to 40. That is your ticket.',
+  'Your stake is taken when you tap Draw. The house then pulls balls from the hopper.',
+  'Each drawn ball that is on your ticket is a hit. Hits pay the multiplier into your wallet.',
+  'Stake ₦50–₦1,000. Bingo is the bonus ball when the draw includes one.',
+]
+
+const schema = z.object({
+  stake: z.coerce.number().min(50, 'Minimum stake is 50').max(1000, 'Maximum stake is 1000'),
+  picks: z.array(z.number().min(1).max(40)).length(MAX_PICKS, `Pick exactly ${MAX_PICKS} numbers`),
+})
 
 type Result = {
   isWin: boolean
   message: string
   payout: number
   multiplier: string
-  bingoNumber: number,
-  drawCount: number,
-  drewNumbers: number[],
-  matchedNumbers: number[],
+  bingoNumber: number
+  drawCount: number
+  drewNumbers: number[]
+  matchedNumbers: number[]
   userPicks: number[]
 }
 
-const schema = z.object({
-  stake: z.coerce.number()
-    .min(50, "Minimum stake is 50")
-    .max(1000, "Maximum stake is 1000"),
-  picks: z.array(
-    z.number()
-      .min(1, "Number must be at least 1")
-      .max(40, "Number cannot exceed 40")
-  ).length(5, "You must pick exactly 5 numbers"),
+const emptyResult = (): Result => ({
+  isWin: false,
+  message: '',
+  payout: 0,
+  multiplier: '3x',
+  bingoNumber: 0,
+  drawCount: 0,
+  drewNumbers: [],
+  matchedNumbers: [],
+  userPicks: [],
 })
 
+const ALL_NUMBERS = Array.from({ length: 40 }, (_, i) => i + 1)
+
+function pickQuickFive() {
+  const pool = [...ALL_NUMBERS]
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  return pool.slice(0, MAX_PICKS).sort((a, b) => a - b)
+}
+
 const LotteryScreen = () => {
-
   const { top, bottom } = useSafeAreaInsets()
-  const [stake, setStake] = useState("50")
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<Result>({
-    isWin: false,
-    message: "",
-    payout: 0,
-    multiplier: "3x",
-    bingoNumber: 0,
-    drawCount: 0,
-    drewNumbers: [],
-    matchedNumbers: [],
-    userPicks: []
-  })
-  const [history, setHistory] = useState<boolean[]>([])
-  const [showModal, setShowModal] = useState(false)
   const sfx = useSfx()
+  const [stake, setStake] = useState('50')
+  const [loading, setLoading] = useState(false)
+  const [drawing, setDrawing] = useState(false)
+  const [revealed, setRevealed] = useState(0)
+  const [result, setResult] = useState<Result>(emptyResult)
+  const [history, setHistory] = useState<boolean[]>([])
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
   const [fetchWallet, setFetchWallet] = useState(false)
+  const [numbersSelected, setNumbersSelected] = useState<number[]>([])
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  const numbers = Array.from({ length: 40 }, (_, i) => i + 1);
-  const [numbersSelected, setNumbersSelected] = useState<number[]>([]);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+      revealTimers.current.forEach(clearTimeout)
+    }
+  }, [])
 
-    const addNumber = (item: number) => {
-      setResult({
-        isWin: false,
-        message: "",
-        payout: 0,
-        multiplier: "3x",
-        bingoNumber: 0,
-        drawCount: 0,
-        drewNumbers: [],
-        matchedNumbers: [],
-        userPicks: []
+  useEffect(() => {
+    AsyncStorage.getItem(RULES_KEY)
+      .then((seen) => {
+        if (!seen) setRulesOpen(true)
       })
+      .catch(() => {})
+  }, [])
 
-      setNumbersSelected(prev => {
-          // If already selected → remove (no error)
-          if (prev.includes(item)) {
-            return prev.filter(n => n !== item);
-          }
+  const clearRevealTimers = () => {
+    revealTimers.current.forEach(clearTimeout)
+    revealTimers.current = []
+  }
 
-          // If not selected and limit reached → show error
-          if (prev.length === 5) {
-            sfx.error()
-            Toast.show({
-              type: 'error',
-              text1: 'Maximum numbers reached',
-              text2: 'You can only pick up to 5 numbers',
-            });
-            return prev;
-          }
+  const resetDraw = () => {
+    clearRevealTimers()
+    setShowOverlay(false)
+    setDrawing(false)
+    setRevealed(0)
+    setResult(emptyResult())
+  }
 
-          // Otherwise → add number
-          sfx.next()
-          return [...prev, item];
-      });
-    };
+  const addNumber = (item: number) => {
+    if (loading || drawing) return
+    resetDraw()
 
-    const handlePlay = async () => {
-      if (loading) return
-      
-      const result = schema.safeParse({ stake, picks: numbersSelected });
-      
-      if (!result.success) {
-        const firstIssue = result.error.issues[0];
-  
-        return Toast.show({
-          type: 'info',
-          text1: firstIssue.message,
-        });
-      }
+    if (numbersSelected.includes(item)) {
+      sfx.next()
+      setNumbersSelected((prev) => prev.filter((n) => n !== item))
+      return
+    }
 
+    if (numbersSelected.length >= MAX_PICKS) {
+      sfx.error()
+      Toast.show({
+        type: 'info',
+        text1: `You already picked ${MAX_PICKS} numbers`,
+        text2: 'Tap a selected ball to swap it out',
+      })
+      return
+    }
+
+    sfx.next()
+    setNumbersSelected((prev) => {
+      if (prev.includes(item) || prev.length >= MAX_PICKS) return prev
+      return [...prev, item]
+    })
+  }
+
+  const quickPick = () => {
+    if (loading || drawing) return
+    sfx.next()
+    resetDraw()
+    setNumbersSelected(pickQuickFive())
+  }
+
+  const clearPicks = () => {
+    if (loading || drawing) return
+    sfx.next()
+    resetDraw()
+    setNumbersSelected([])
+  }
+
+  const runReveal = (drawn: number[], onDone: () => void) => {
+    if (reduceMotion || drawn.length === 0) {
+      setRevealed(drawn.length)
+      onDone()
+      return
+    }
+
+    drawn.forEach((_, index) => {
+      const t = setTimeout(() => {
+        setRevealed(index + 1)
+        sfx.next()
+        triggerHaptic('roll')
+        if (index === drawn.length - 1) onDone()
+      }, index * BALL_MS)
+      revealTimers.current.push(t)
+    })
+  }
+
+  const handlePlay = async () => {
+    if (loading || drawing) return
+
+    const parsed = schema.safeParse({ stake, picks: numbersSelected })
+    if (!parsed.success) {
+      return Toast.show({
+        type: 'info',
+        text1: parsed.error.issues[0].message,
+      })
+    }
+
+    try {
+      setLoading(true)
+      setShowOverlay(false)
+      setRevealed(0)
+      setDrawing(true)
       sfx.flip()
+      triggerHaptic('roll')
 
-      const payload = {
+      const started = Date.now()
+      const res = await axiosClient.post('/virtual/play-lottery', {
         picks: numbersSelected,
         stake: Number(stake),
-      };
+      })
 
-      try {
-        setLoading(true);
-        console.log('Sending payload:', payload);
+      const data = res.data.game.result
+      const correct: boolean = data.is_win
+      const drewNumbers: number[] = data.drew_numbers || []
 
-        const res = await axiosClient.post("/virtual/play-lottery", payload);
+      const hopperWait = reduceMotion ? 0 : Math.max(0, HOPPER_MS - (Date.now() - started))
+      if (hopperWait) await new Promise((resolve) => setTimeout(resolve, hopperWait))
 
-        const data = res.data.game.result
+      setResult({
+        isWin: correct,
+        message: data.win_message,
+        payout: data.payout || 0,
+        multiplier: data.multiplier,
+        bingoNumber: data.bingo_number,
+        drawCount: data.draw_count,
+        drewNumbers,
+        matchedNumbers: data.matched_numbers || [],
+        userPicks: data.user_picks || numbersSelected,
+      })
+      setHistory((prev) => [correct, ...prev].slice(0, 12))
+      setDrawing(false)
+      setFetchWallet(true)
 
-        console.log('API response:', data);
-        console.log('matched:', res.data);
-
-        const correct: boolean = data.is_win
- 
-        //outcome sound
+      runReveal(drewNumbers, () => {
         if (correct) {
           sfx.win()
+          triggerHaptic('win')
         } else {
           sfx.lose()
+          triggerHaptic('lose')
         }
-
-        setHistory(prev => [correct, ...prev].slice(0, 20))
-
-        setResult({
-          isWin: correct,
-          message: data.win_message,
-          payout: data.payout || 0,
-          multiplier: data.multiplier,
-          bingoNumber: data.bingo_number,
-          drawCount: data.draw_count,
-          drewNumbers: data.drew_numbers,
-          matchedNumbers: data.matched_numbers,
-          userPicks: data.user_picks,
-        })
-
-        setShowModal(true)
-        setNumbersSelected([]);
-
-        setFetchWallet(true)
-
-      } catch (error: any) {
-        sfx.error()
-        Toast.show({
-          type: 'error',
-          text1:
-            error?.response?.data?.message?.stake ||
-            error?.response?.data?.message ||
-            "Something went wrong",
-        })
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const clear = () => {
-      sfx.next()
-      setNumbersSelected([])
-      setResult({
-        isWin: false,
-        message: "",
-        payout: 0,
-        multiplier: "3x",
-        bingoNumber: 0,
-        drawCount: 0,
-        drewNumbers: [],
-        matchedNumbers: [],
-        userPicks: []
+        setShowOverlay(true)
+        if (overlayTimer.current) clearTimeout(overlayTimer.current)
+        overlayTimer.current = setTimeout(() => setShowOverlay(false), 2000)
+        setLoading(false)
       })
-      setShowModal(false)
+    } catch (error: any) {
+      sfx.error()
+      setDrawing(false)
+      setRevealed(0)
+      Toast.show({
+        type: 'error',
+        text1: getApiErrorMessage(error),
+      })
+      setLoading(false)
     }
+  }
 
-    const goBack = () => {
-      if(fetchWallet){
-        getWallet(false)
-        getUnreadNotifications();
-      }
-      router.back()
+  const goBack = () => {
+    if (fetchWallet) {
+      getWallet(false)
+      getUnreadNotifications()
     }
+    router.back()
+  }
+
+  const ticketSlots = Array.from({ length: MAX_PICKS }, (_, i) => numbersSelected[i])
+  const matchSet = new Set(result.matchedNumbers)
+  const busy = loading || drawing
 
   return (
-    <LinearGradient
-      colors={["#0b2a3a", "#061c26"]}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#0b2a3a', '#061c26']} style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", gap: 20, padding: 12 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between', gap: 18, padding: 12 }}
       >
-        {/* HEADER */}
-        <View className='flex-row items-center gap-1 flex-wrap' style={{ marginTop: top }}>
-          <TouchableOpacity activeOpacity={0.8} onPress={goBack}>
-            <Feather name="chevron-left" size={34} color="#e6e1c5" />
-          </TouchableOpacity>
-          <View style={styles.header}>
-            <View style={styles.logo}>
-              <Text style={{ fontSize: 18 }}>🔢</Text>
+        <View style={[styles.header, { marginTop: top }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <TouchableOpacity onPress={goBack} accessibilityLabel="Back">
+              <Feather name="chevron-left" size={30} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.logoCircle}>
+              <Text>🎱</Text>
             </View>
-            <Text style={styles.title}>Lottery</Text>
+            <Text style={styles.title}>Lottery draw</Text>
           </View>
+          <TouchableOpacity onPress={() => setRulesOpen(true)} style={styles.helpBtn} accessibilityLabel="How to play">
+            <Text style={styles.helpText}>?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <GameBalancePill />
         </View>
 
-        {/* RANGE INFO */}
-        <View style={styles.row}>
-          <View style={styles.controlPill}>
-            <Text style={styles.controlLabel}>STAKE</Text>
-            <View style={styles.counterRow}>
-              <TextInput
-                value={stake}
-                onChangeText={(text) => setStake(text)}
-                keyboardType="numeric"
-                placeholder="Enter stake"
-                placeholderTextColor="#9fb7a9"
-                cursorColor="white"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  borderRadius:16,
-                  borderWidth: 1,
-                  borderColor: "#caa85e",
-                  padding: 8,
-                  fontSize: 16,
-                  flex: 1,
-                  color: "#fff",
-                  textAlign: "center"
-                }}
-              />
+        <GameStatsRow
+          stake={stake}
+          onStakeChange={setStake}
+          payout={result.payout ? displayCurrency(Number(result.payout)) : '—'}
+          multiplier={result.multiplier || '—'}
+          stakeEditable={!busy}
+        />
+
+        <View style={styles.ticket}>
+          <View style={styles.ticketHead}>
+            <Text style={styles.ticketLabel}>
+              {numbersSelected.length}/{MAX_PICKS} on your ticket
+            </Text>
+            <View style={styles.ticketActions}>
+              <TouchableOpacity onPress={quickPick} disabled={busy}>
+                <Text style={styles.actionText}>Quick pick</Text>
+              </TouchableOpacity>
+              {numbersSelected.length > 0 ? (
+                <TouchableOpacity onPress={clearPicks} disabled={busy}>
+                  <Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
-
-          <View style={styles.rangeInfo}>
-            <View>
-              <Text style={styles.label}>PAYOUT</Text>
-              <Text style={styles.gold}>{result?.payout}</Text>
-            </View>
-            <View>
-              <Text style={styles.label}>MULTIPLIER</Text>
-              <Text style={styles.gold}>{result?.multiplier}</Text>
-            </View>
+          <View style={styles.ticketRow}>
+            {ticketSlots.map((n, i) =>
+              n ? (
+                <LotteryBall key={`t-${n}`} n={n} size={44} tone={matchSet.has(n) ? 'hit' : 'picked'} />
+              ) : (
+                <View key={`empty-${i}`} style={styles.ticketEmpty} />
+              ),
+            )}
           </View>
         </View>
 
-        <View className='gap-2 px-4'>
-            {numbersSelected.length <= 0 && (
-                <Text className='font-msbold text-white'>Pick 5 numbers</Text>
-            )}
-            {numbersSelected.length > 0 && (
-                <View className='flex-row items-center justify-between'>
-                    <Text className='font-msbold text-white'>Numbers picked</Text>
-                    <TouchableOpacity onPress={clear}>
-                        <Text className='font-msbold text-red-500'>Clear</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-            <View className='flex-row gap-1 flex-wrap items-center'>
-                {numbersSelected.map((num, index) => (
-                    <View
-                      key={num}
-                      style={styles.pickedCircle}
-                    >
-                      <Text style={styles.circleText}>{num}</Text>
-                    </View>
-                ))}
-            </View>
+        <View style={styles.machineWrap}>
+          <LotteryMachine
+            drawing={drawing}
+            drawn={result.drewNumbers}
+            matched={result.matchedNumbers}
+            revealed={revealed}
+            bingoNumber={result.bingoNumber}
+            reduceMotion={reduceMotion}
+          />
+          <RoundResultOverlay
+            visible={showOverlay}
+            isWin={result.isWin}
+            title={result.isWin ? 'You hit the draw' : 'No payout this draw'}
+            detail={
+              result.isWin
+                ? `+${displayCurrency(Number(result.payout || 0))}`
+                : result.matchedNumbers.length
+                  ? `${result.matchedNumbers.length} hit${result.matchedNumbers.length === 1 ? '' : 's'}`
+                  : 'No numbers matched'
+            }
+            reduceMotion={reduceMotion}
+          />
         </View>
 
-        {/* NUMBER GRID */}
         <View style={styles.gridBox}>
           <View style={styles.grid}>
-            {numbers.map((num) => {
+            {ALL_NUMBERS.map((num) => {
               const picked = numbersSelected.includes(num)
+              const lockedOut = !picked && numbersSelected.length >= MAX_PICKS
+              const hit = matchSet.has(num)
               return (
                 <TouchableOpacity
                   key={num}
-                  style={[styles.circle, picked && styles.activeCircle]}
                   onPress={() => addNumber(num)}
+                  disabled={busy}
+                  activeOpacity={0.85}
+                  style={lockedOut ? styles.locked : undefined}
                 >
-                  <Text style={styles.circleText}>{num}</Text>
+                  <LotteryBall
+                    n={num}
+                    size={46}
+                    tone={hit && picked ? 'hit' : picked ? 'picked' : 'idle'}
+                  />
                 </TouchableOpacity>
               )
             })}
           </View>
         </View>
 
-        {/* PICK BOX */}
-        <View style={styles.pickBox}>
-          {loading ? (
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <Text style={{ fontSize: 18, fontWeight: "900", color: "#fff" }}>Loading...</Text>
-            </View>
-          ) : !numbersSelected?.length && !result?.message ? (
-            <Text style={styles.pickText}>🔥 pick 5 numbers</Text>
-          ) : result?.message ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              {result?.isWin ? (
-                <>
-                  <Text className="text-white text-3xl">✅</Text>
-                  <Text className="text-white font-msbold text-xl">
-                    🎯 🎉 WIN! <Text style={{ fontWeight: "700", textTransform: "uppercase" }}>+{result?.payout}</Text>
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text className="text-white text-3xl">🌡️ ❌</Text>
-                  <Text className="text-white font-msbold text-xl">
-                    LOSS. <Text style={{ fontWeight: "700", textTransform: "uppercase" }}>-{stake}</Text>
-                  </Text>
-                </>
-              )}
-            </View>
+        <View style={styles.resultBox}>
+          {busy ? (
+            <Text style={styles.betText}>Drawing from the hopper…</Text>
+          ) : result.message ? (
+            <Text style={styles.betText}>
+              {result.isWin ? 'Win' : 'Loss'}
+              {result.matchedNumbers.length ? ` · ${result.matchedNumbers.length} hit` : ' · no hits'}
+            </Text>
           ) : (
-            <Text style={styles.pickText}>
-              🤔 {numbersSelected?.length} number{numbersSelected?.length !== 1 ? 's' : ''} picked 
-            </Text>
+            <Text style={styles.betText}>Five numbers. One draw.</Text>
           )}
-
-          <View style={styles.multiplierPill}>
-            <Text style={styles.multiplierText}>
-              {result.multiplier}
-            </Text>
-          </View>
+          <Text style={styles.multiHint}>{result.multiplier}</Text>
         </View>
 
-        {/* ACTION BUTTON */}
-        <TouchableOpacity disabled={loading} className={`${loading || numbersSelected.length < 5 ? 'opacity-60' : ''}`} style={styles.playBtn} onPress={handlePlay}>
-          {loading ? (
+        <TouchableOpacity disabled={busy} style={[styles.playBtn, busy && styles.playBtnBusy]} onPress={handlePlay}>
+          {busy ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <ActivityIndicator color="#000" />
-              <Text style={{ fontSize: 18, fontWeight: "900" }}>Loading...</Text>
+              <ActivityIndicator color="#0b1d26" />
+              <Text style={styles.playText}>DRAWING…</Text>
             </View>
           ) : (
-              <Text style={styles.playText}>▶ Play</Text>
+            <Text style={styles.playText}>DRAW</Text>
           )}
         </TouchableOpacity>
 
-        {/* FOOTER */}
-        <View style={[styles.footer, { marginBottom: bottom }]}>
-          <Text style={styles.footerText}>📋 last rolls 🔊 sound on</Text>
-          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            {history.length <= 0 ? (
-              <Text className='text-white text-xl italic'>Place a lottery bet</Text>
-            ) : (
-              history.map((h, i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: h ? '#5fd48c' : '#e06969'
-                  }}
-                >
-                  <Text style={{ color: '#ffeca6' }}>
-                    {h ? '✅' : '❌'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
+        <View style={{ marginBottom: bottom }}>
+          <GameHistoryStrip history={history} emptyLabel="Draw to start a streak" />
         </View>
-
-        <Modal
-          transparent={true}
-          visible={showModal}
-          statusBarTranslucent={true}
-          onRequestClose={() => setShowModal(false)}>
-          <View className="flex-1 justify-center items-center px-8" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-
-              {/* Actual modal content */}
-              <View className="relative rounded-2xl max-h-[60%] py-4 w-full bg-white">
-
-                {/* TOP BADGE */}
-                <View className="absolute -top-10 left-0 right-0 items-center">
-                  <View className={`rounded-full items-center justify-center size-20 bg-white`}>
-                    <Text className={`font-mbold text-base`}>
-                     {result.isWin ? '🎉' : '❌'} 
-                    </Text>
-                    <Text className={`font-mbold text-lg ${result.isWin ? 'text-green-600' : 'text-red-600'}`}>
-                      {result.isWin ? 'WIN' : 'LOSE'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* CONTENT */}
-                <View className="w-full px-4 mt-10">
-
-                  <Text className="font-mbold text-xl text-center">
-                    {result.isWin ? '🎉 Congratulations!' : '😢 Better luck next time'}
-                  </Text>
-
-                  <Text className="font-mmedium text-center my-2">
-                    {result.message}
-                  </Text>
-
-                  {/* PAYOUT */}
-                  <Text className="text-center text-lg font-mbold my-1">
-                    {result.isWin ? `+${result.payout}` : `-${stake}`}
-                  </Text>
-
-                  {/* PAYOUT */}
-                  <Text className="text-center text-base font-msbold my-1">
-                    Bingo Number: {result.bingoNumber}
-                  </Text>
-
-                  {/* NUMBERS */}
-                  <View className="my-2 gap-2">
-
-                    <Text className="font-mbold text-center">Your Picks</Text>
-                    <View className="flex-row flex-wrap justify-center gap-2">
-                      {result.userPicks.map((num) => (
-                        <View key={num} className="bg-gray-200 px-3 py-1 rounded-full">
-                          <Text>{num}</Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    <Text className="font-mbold text-center mt-3">Drawn Numbers</Text>
-                    <View className="flex-row flex-wrap justify-center gap-2">
-                      {result.drewNumbers.map((num) => {
-                        const isMatched = result.matchedNumbers.includes(num)
-                        return (
-                          <View
-                            key={num}
-                            className={`px-3 py-1 rounded-full ${isMatched ? 'bg-green-400' : 'bg-gray-200'}`}
-                          >
-                            <Text>{num}</Text>
-                          </View>
-                        )
-                      })}
-                    </View>
-
-                    <View className="mt-4">
-                      <Text className="font-mbold text-center">Matched Numbers</Text>
-
-                      {result.matchedNumbers.length === 0 ? (
-                        <Text className="text-center text-gray-400 mt-2">No matches</Text>
-                      ) : (
-                        <View className="flex-row flex-wrap justify-center gap-2 mt-2">
-                          {result.matchedNumbers.map((num) => (
-                            <View
-                              key={num}
-                              className="bg-green-500 px-3 py-1 rounded-full"
-                            >
-                              <Text className="text-white font-mbold">{num}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-
-                  </View>
-
-                  {/* ACTION */}
-                  <TouchableOpacity style={styles.playAgainBtn} onPress={clear}>
-                    <Text style={styles.playAgainText}>▶ Play Again</Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-          </View>
-      </Modal>
-            
       </ScrollView>
+
+      <GameRulesSheet
+        visible={rulesOpen}
+        title="How Lottery draw works"
+        steps={LOTTERY_RULES}
+        onClose={() => {
+          setRulesOpen(false)
+          void AsyncStorage.setItem(RULES_KEY, '1')
+        }}
+      />
     </LinearGradient>
   )
 }
@@ -491,225 +424,133 @@ export default LotteryScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between",
   },
-
   header: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logoCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#1b4a5f',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    color: '#dbe7ee',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  helpBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(202,168,94,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helpText: {
+    color: '#e6d59b',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  ticket: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(202,168,94,0.28)',
     gap: 12,
   },
-
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#12394a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  title: {
-    color: "#dbe7ee",
-    fontSize: 20,
-    fontWeight: "600",
-  },
-
-  row: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "stretch",
-  },
-
-  controlPill: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 25,
-    padding: 16
-  },
-
-  controlLabel: {
-    fontSize: 12,
-    color: "#9fb7a9",
-    marginBottom: 6,
-  },
-
-  counterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6
-  },
-
-  rangeInfo: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 16,
-    borderRadius: 25,
-    gap: 10,
-  },
-
-  label: {
-    color: "#7fa6b8",
-    fontSize: 10,
-  },
-
-  gold: {
-    color: "#f6d98a",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  rangeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-
-  rangeBtn: {
-    flex: 1,
-    backgroundColor: "#173b4c",
-    padding: 16,
-    borderRadius: 25,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-
-  activeRange: {
-    borderWidth: 2,
-    borderColor: "#e3a843",
-  },
-
-  rangeText: {
-    color: "#c7d6df",
-  },
-
-  activeText: {
-    color: "#f6d98a",
-    fontWeight: "bold",
-  },
-
-  gridBox: {
-    backgroundColor: "#173b4c",
-    borderRadius: 30,
-    padding: 20
-  },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10
-  },
-
-  circle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#e6e3da",
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-
-  activeCircle: {
-    backgroundColor: "#e3a843",
-  },
-
-  circleText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1b2a34",
-  },
-
-  pickedCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#e6e3da",
-    justifyContent: "center",
-    alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-
-  pickBox: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
+  ticketHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
-    borderRadius: 30,
+  },
+  ticketLabel: {
+    color: '#e6e1c5',
+    fontWeight: '700',
+    fontSize: 14,
+    flex: 1,
+  },
+  ticketActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionText: {
+    color: '#caa85e',
+    fontWeight: '700',
+  },
+  clearText: {
+    color: '#e06969',
+    fontWeight: '700',
+  },
+  ticketRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  ticketEmpty: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(159,183,169,0.4)',
+  },
+  machineWrap: {
+    position: 'relative',
+  },
+  gridBox: {
+    backgroundColor: '#123544',
+    borderRadius: 28,
+    padding: 14,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  locked: {
+    opacity: 0.32,
+  },
+  resultBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#2f5668",
-    padding: 18,
+    borderColor: '#2f5668',
+    padding: 16,
   },
-
-  pickText: {
-    color: "#c7d6df",
-    fontSize: 16,
+  betText: {
+    color: '#c7d6df',
+    fontSize: 15,
+    flex: 1,
+    paddingRight: 8,
   },
-
-  multiplierPill: {
-    backgroundColor: "#e3a843",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+  multiHint: {
+    color: '#e6d59b',
+    fontWeight: '700',
   },
-
-  multiplierText: {
-    color: "#1b2a34",
-    fontWeight: "bold",
-  },
-
   playBtn: {
-    backgroundColor: "#4fa3d1",
+    backgroundColor: '#e3a843',
     padding: 20,
     borderRadius: 40,
-    alignItems: "center",
+    alignItems: 'center',
   },
-
+  playBtnBusy: {
+    opacity: 0.7,
+  },
   playText: {
-    color: "#0b1d26",
+    color: '#0b1d26',
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
-
-   playAgainBtn: {
-    backgroundColor: "#4fa3d1",
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 10
-  },
-
-  playAgainText: {
-    color: "#0b1d26",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  footer: {
-    gap: 4,
-    backgroundColor: '#163447',
-    padding: 12,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: "#2f5668",
-  },
-
-  footerText: {
-    color: "#e6e1c5",
-    fontSize: 16,
-    marginBottom: 10,
-  }
 })

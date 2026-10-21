@@ -1,33 +1,28 @@
 {
   "cli": {
-    "version": ">= 18.4.0",
-    "appVersionSource": "remote"
+    "version": ">= 16.0.0",
+    "appVersionSource": "local",
+    "requireCommit": false
   },
   "build": {
-    "base": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_SERVER_URI": "https://buzzycash.viaspark.site/api/v1",
         "EXPO_PUBLIC_IMAGE_URI": "https://buzzycash.viaspark.site"
       }
     },
-    "development": {
-      "extends": "base",
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "extends": "base",
-      "distribution": "internal"
-    },
     "production": {
-      "extends": "base",
-      "autoIncrement": true,
-      "ios": {
-        "image": "latest"
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URI": "https://buzzycash.viaspark.site/api/v1",
+        "EXPO_PUBLIC_IMAGE_URI": "https://buzzycash.viaspark.site"
       }
     }
-  },
-  "submit": {
-    "production": {}
   }
 }

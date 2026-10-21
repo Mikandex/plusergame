@@ -20,21 +20,18 @@ import {
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import z from 'zod';
+import { getApiErrorMessage } from '@/utils/apiErrorMessage';
+import { identifierSchema, identifierToPayload } from '@/utils/identifier';
 
-const forgotSchema = z
-.object({
-  phoneNumber: z
-    .string()
-    .min(10, "Phone number is less than 10 digits")
-    .max(11, "Phone number is greater than 11 digits")
-    .regex(/^\d+$/, "Phone number must contain only digits")
+const forgotSchema = z.object({
+  identifier: identifierSchema,
 })
 
 export default function ForgotPassword() {
 
   const { isLoading, setLoading } = useLoaderStore()
   const [form, setForm] = useState({
-    phoneNumber: ''
+    identifier: ''
   })
 
   const bottom = useSafeAreaInsets().bottom;
@@ -54,26 +51,24 @@ export default function ForgotPassword() {
       });
     }
 
-    const removeFirstZero = form.phoneNumber.startsWith("0") ? form.phoneNumber.slice(1) : form.phoneNumber;
-    const phone = `+234${removeFirstZero}`;
-
-    const removePlusSign = phone.replace("+", "");
+    const payload = identifierToPayload(form.identifier);
 
     try {
 
       setLoading(true)
 
-      const payload = { phone_number: removePlusSign }
+      await axiosClient.post("/auth/forgot-password", payload)
 
-      const result = await axiosClient.post("/auth/forgot-password", payload)
-  
-      router.push("/(onboarding)/ResetPasswordOTP")
-      
-    } catch (error: any) {
+      router.push({
+        pathname: "/(onboarding)/ResetPasswordOTP",
+        params: { target: JSON.stringify(payload) },
+      })
+
+    } catch (error: unknown) {
 
       Toast.show({
         type: 'error',
-        text1: error.response.data.message
+        text1: getApiErrorMessage(error)
       });
 
     } finally {
@@ -102,7 +97,7 @@ export default function ForgotPassword() {
               {/* Form Card */}
               <View className="bg-charcoal-light rounded-3xl p-6" style={{ marginBottom: bottom + 16 }}>
 
-                <FormField title="Enter Phone Number" value={form.phoneNumber} placeholder="Enter here" handleChangeText={(e: any) => setForm({ ...form, phoneNumber: e })} keyboardType='numeric' />
+                <FormField title="Phone Number or Email" value={form.identifier} placeholder="08010000001 or name@email.com" handleChangeText={(e: any) => setForm({ ...form, identifier: e })} keyboardType='email-address' autoCapitalize='none' autoCorrect={false} />
 
                 <CustomButton title="Continue" handlePress={handleContinue} containerStyles="w-[70%] rounded-lg mt-8 mx-auto" textStyles='text-white'/>
 

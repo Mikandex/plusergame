@@ -4,12 +4,6 @@ import moment from 'moment'
 import displayCurrency from '@/utils/displayCurrency';
 import { FontAwesome6 } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-// import Toast from 'react-native-toast-message';
-
-const statusColors: Record<string, string> = {
-  true: 'text-green-600',
-  false: 'text-red-600',
-};
 
 const GameHistoryCard = ({item, index}: {item: any; index: number}) => {
 
@@ -79,7 +73,7 @@ const GameHistoryCard = ({item, index}: {item: any; index: number}) => {
             <Text className="font-msbold text-base capitalize text-white" numberOfLines={1}>Status</Text>
           </View>
           <View className='items-end justify-end gap-2 flex-1'>
-            <Text className={`font-msbold text-base capitalize ${statusColors[item?.is_win] ?? ''}`}>{item?.is_win ? "WON" : "LOST"}</Text>
+            <Text className={`font-msbold text-base capitalize ${item?.is_win ? 'text-yellow' : 'text-red'}`}>{item?.is_win ? "WON" : "LOST"}</Text>
           </View>
         </View>
       </View>

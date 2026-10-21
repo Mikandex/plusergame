@@ -23,7 +23,7 @@ import {
   Modal,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import DatePicker from 'react-native-date-picker'
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useLoaderStore } from '@/store/loaderStore';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -347,21 +347,57 @@ export default function EditProfileScreen() {
             </ScrollView>
           </KeyboardAvoidingView>
 
-          <DatePicker
-            modal
-            open={open}
-            mode="date"
-            date={date}
-            onConfirm={(date) => {
-              setOpen(false)
-              setHasPickedDate(true)
-              setDate(date)
-            }}
-            onCancel={() => {
-              setOpen(false)
-            }}
-            theme={'dark'}
-          />
+          {open && Platform.OS === 'android' ? (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="calendar"
+              maximumDate={new Date()}
+              onChange={(event: DateTimePickerEvent, selected?: Date) => {
+                setOpen(false)
+                if (event.type === 'set' && selected) {
+                  setHasPickedDate(true)
+                  setDate(selected)
+                }
+              }}
+            />
+          ) : null}
+
+          <Modal
+            transparent
+            animationType="slide"
+            visible={open && Platform.OS === 'ios'}
+            onRequestClose={() => setOpen(false)}
+          >
+            <View className="flex-1 justify-end bg-black/55">
+              <View className="bg-charcoal-light rounded-t-3xl px-4 pt-4 pb-8">
+                <View className="flex-row items-center justify-between mb-2">
+                  <TouchableOpacity onPress={() => setOpen(false)}>
+                    <Text className="text-white font-mregular text-base">Cancel</Text>
+                  </TouchableOpacity>
+                  <Text className="text-white font-msbold text-base">Date of Birth</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setHasPickedDate(true)
+                      setOpen(false)
+                    }}
+                  >
+                    <Text className="text-yellow font-msbold text-base">Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="spinner"
+                  themeVariant="dark"
+                  maximumDate={new Date()}
+                  onChange={(_: DateTimePickerEvent, selected?: Date) => {
+                    if (selected) setDate(selected)
+                  }}
+                />
+              </View>
+            </View>
+          </Modal>
 
         <Modal transparent={false} visible={showModal} onRequestClose={() => setShowModal(false)}>
           <SafeAreaView className='flex-1 bg-charcoal'>

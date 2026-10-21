@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { Image as ExpoImage } from 'expo-image';
 
 export default function ProfileScreen() {
 
@@ -67,11 +68,20 @@ export default function ProfileScreen() {
 
         {/* User Info */}
         <View className='flex-row items-center gap-4 mb-6 mt-4'>
-          <View className='p-1 rounded-full border-2 border-yellow bg-charcoal'>
-            <Image
-              source={images.avatar}
-              className='w-20 h-20 rounded-full'
-            />
+          <View className='p-1 rounded-full border-2 border-yellow bg-charcoal overflow-hidden'>
+            {userProfile?.profilePicture ? (
+              <ExpoImage
+                source={{ uri: `${process.env.EXPO_PUBLIC_IMAGE_URI}${userProfile.profilePicture}` }}
+                contentFit="cover"
+                cachePolicy="disk"
+                style={{ width: 80, height: 80, borderRadius: 40 }}
+              />
+            ) : (
+              <Image
+                source={images.avatar}
+                className='w-20 h-20 rounded-full'
+              />
+            )}
           </View>
           <View className='flex-1'>
             <Text className='text-white text-base font-msbold' numberOfLines={2}>{userProfile?.fullName}</Text>

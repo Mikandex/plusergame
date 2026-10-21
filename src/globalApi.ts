@@ -109,8 +109,13 @@ axiosClient.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
       return axiosClient(originalRequest);
     } catch (refreshError) {
-      console.error('Failed to refresh token:', refreshError);
-      refreshSubscribers = []; // ← Clear queue on failure
+      // Stale SecureStore tokens are normal after Redis restart, another login,
+      // or a refresh JWT older than 7 days. Send the user to login quietly.
+      if (__DEV__) {
+        const status = (refreshError as { response?: { status?: number } })?.response?.status;
+        console.log(status === 401 ? 'Session expired — log in again' : 'Failed to refresh token');
+      }
+      refreshSubscribers = [];
       await clearSessionAndRedirect();
       return Promise.reject(refreshError);
     } finally {

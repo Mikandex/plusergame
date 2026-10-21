@@ -21,7 +21,13 @@
         "monochromeImage": "./assets/images/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.loxfordnavoplus.plusergame"
+      "package": "com.loxfordnavoplus.plusergame",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -41,13 +47,6 @@
       ],
       "expo-secure-store",
       "expo-font",
-      [
-        "expo-image",
-        {
-          "disableLibdav1d": true
-        }
-      ],
-      "expo-audio",
       "expo-asset",
       [
         "expo-file-system",
@@ -69,17 +68,18 @@
             }
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b0e42a30-53e4-4ccb-b4d2-fff6b65f1e33"
+        "projectId": "4f5bb3c2-470c-4f42-9fe1-c6a3ad60042d"
       }
-    }
+    },
+    "owner": "random_expouser"
   }
 }

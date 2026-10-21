@@ -48,7 +48,6 @@ export default function GamesPlayedScreen() {
 
       setGames(prev => isInitial ? newItems : [...prev, ...newItems])
       setHasMore(result.data.hasMore ?? false)
-      console.log(result.data)
     } catch (error: any) {
     //   Toast.show({
     //     type: 'error',
@@ -82,7 +81,7 @@ export default function GamesPlayedScreen() {
 
   return (
     <View className='h-full flex-1 bg-charcoal'>
-      <Header title='Game History' onpress={() => router.back()}/>
+      <Header title='Game History' showBack={false} onpress={() => router.back()}/>
      
       <View className="flex-1 mt-4 px-4 overflow-hidden">
         {loading ? (

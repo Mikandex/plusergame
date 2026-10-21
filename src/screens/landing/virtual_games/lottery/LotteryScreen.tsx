@@ -67,27 +67,27 @@ const LotteryScreen = () => {
         userPicks: []
       })
 
-      setNumbersSelected(prev => {
-          // If already selected → remove (no error)
-          if (prev.includes(item)) {
-            return prev.filter(n => n !== item);
-          }
+      if (numbersSelected.includes(item)) {
+        sfx.next()
+        setNumbersSelected((prev) => prev.filter((n) => n !== item))
+        return
+      }
 
-          // If not selected and limit reached → show error
-          if (prev.length === 5) {
-            sfx.error()
-            Toast.show({
-              type: 'error',
-              text1: 'Maximum numbers reached',
-              text2: 'You can only pick up to 5 numbers',
-            });
-            return prev;
-          }
+      if (numbersSelected.length >= 5) {
+        sfx.error()
+        Toast.show({
+          type: 'info',
+          text1: 'You already picked 5 numbers',
+          text2: 'Tap a selected number to swap it out',
+        })
+        return
+      }
 
-          // Otherwise → add number
-          sfx.next()
-          return [...prev, item];
-      });
+      sfx.next()
+      setNumbersSelected((prev) => {
+        if (prev.includes(item) || prev.length >= 5) return prev
+        return [...prev, item]
+      })
     };
 
     const handlePlay = async () => {

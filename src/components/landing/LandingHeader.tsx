@@ -6,7 +6,7 @@ import { Octicons } from '@expo/vector-icons';
 export default function LandingHeader() {
 
   const goToNotification =  () => {
-    router.push("/(onboarding)/Index")
+    router.push("/(onboarding)")
   }
 
   return (

@@ -1,26 +1,71 @@
-import { View, Text, Image, ActivityIndicator, TouchableOpacity, Modal } from 'react-native'
+import { View, Text, Image, ActivityIndicator, TouchableOpacity, Modal, AccessibilityInfo } from 'react-native'
 import displayCurrency from '@/utils/displayCurrency'
 import IconButton from './IconButton';
 import { router } from 'expo-router';
 import useWalletStore from '@/store/WalletStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome6, Ionicons, Octicons } from '@expo/vector-icons';
 import { images } from '@/constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TouchableWithoutFeedback } from 'react-native';
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 export default function BalanceCard() {
 
-  const { wallet, balanceLoading, hideWallet, setHideWallet } = useWalletStore((state) => state);
+  const { wallet, balanceLoading, hideWallet } = useWalletStore((state) => state);
   const [showModal, setShowModal] = useState(false)
+  const glow = useSharedValue(0.12)
+
+  useEffect(() => {
+    let mounted = true
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (!mounted || enabled) return
+        glow.value = withRepeat(
+          withTiming(0.32, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+          -1,
+          true,
+        )
+      })
+      .catch(() => {})
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      if (enabled) {
+        glow.value = 0.12
+      }
+    })
+    return () => {
+      mounted = false
+      cancelAnimation(glow)
+      sub?.remove?.()
+    }
+  }, [glow])
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glow.value,
+  }))
 
   return (
+    <View style={{ marginBottom: 8 }}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: 'absolute',
+            top: -3,
+            right: -3,
+            bottom: -3,
+            left: -3,
+            borderRadius: 16,
+            backgroundColor: '#D4AF37',
+          },
+          glowStyle,
+        ]}
+      />
     <LinearGradient
       colors={['#D4AF37','#8B1A1A']}
       start={[0, 0]}
       end={[1, 0]}
-      style={{ borderRadius: 14, padding: 1, marginBottom: 8 }}
+      style={{ borderRadius: 14, padding: 1 }}
     >
       <View className='w-full rounded-2xl p-4 overflow-hidden flex-row items-center bg-charcoal'>
 
@@ -123,5 +168,6 @@ export default function BalanceCard() {
         </Modal>
 
     </LinearGradient>
+    </View>
   )
 }

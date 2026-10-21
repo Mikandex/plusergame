@@ -1,32 +1,55 @@
-// hooks/useSfx.ts
-import { sounds } from '@/constants'
-import { useAudioPlayer } from 'expo-audio'
+import { useCallback, useEffect, useRef } from "react";
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioSource } from "expo-audio";
+import { sounds } from "@/constants";
+
+type SfxKey = "flip" | "win" | "lose" | "next" | "error";
+
+const SFX_SOURCES: Record<SfxKey, AudioSource> = {
+  flip: sounds.flipPlayer,
+  win: sounds.winPlayer,
+  lose: sounds.losePlayer,
+  next: sounds.startPlayer,
+  error: sounds.errorPlayer,
+};
 
 export const useSfx = () => {
-  const flipPlayer  = useAudioPlayer(sounds.flipPlayer)
-  const winPlayer   = useAudioPlayer(sounds.winPlayer)
-  const losePlayer  = useAudioPlayer(sounds.losePlayer)
-  const nextPlayer  = useAudioPlayer(sounds.startPlayer)
-  const errorPlayer = useAudioPlayer(sounds.errorPlayer)
+  const players = useRef<Partial<Record<SfxKey, AudioPlayer>>>({});
 
-  flipPlayer.volume  = 1.0
-  winPlayer.volume   = 1.0
-  losePlayer.volume  = 1.0
-  nextPlayer.volume  = 1.0
-  errorPlayer.volume = 1.0
+  useEffect(() => {
+    let mounted = true;
 
-  const play = (player: typeof flipPlayer) => {
+    void setAudioModeAsync({ playsInSilentMode: true });
+
+    for (const [key, source] of Object.entries(SFX_SOURCES) as [SfxKey, AudioSource][]) {
+      if (!mounted) return;
+      const player = createAudioPlayer(source, { updateInterval: 500 });
+      player.volume = 1;
+      players.current[key] = player;
+    }
+
+    return () => {
+      mounted = false;
+      Object.values(players.current).forEach((player) => player?.remove());
+      players.current = {};
+    };
+  }, []);
+
+  const play = useCallback(async (key: SfxKey) => {
     try {
-      player.seekTo(0)
-      player.play()
-    } catch {}
-  }
+      const player = players.current[key];
+      if (!player) return;
+      await player.seekTo(0);
+      player.play();
+    } catch {
+      // ignore playback errors during rapid game actions
+    }
+  }, []);
 
   return {
-    flip:  () => play(flipPlayer),
-    win:   () => play(winPlayer),
-    lose:  () => play(losePlayer),
-    next:  () => play(nextPlayer),
-    error: () => play(errorPlayer),
-  }
-}
+    flip: () => void play("flip"),
+    win: () => void play("win"),
+    lose: () => void play("lose"),
+    next: () => void play("next"),
+    error: () => void play("error"),
+  };
+};

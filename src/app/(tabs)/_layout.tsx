@@ -77,7 +77,7 @@ export default function TabLayout() {
           tabPress: (e) => {
             if (!isAuthenticated) {
               e.preventDefault();
-              router.push('/(onboarding)/Index');
+              router.push('/(onboarding)');
             }
           }
         })}
@@ -87,7 +87,7 @@ export default function TabLayout() {
           tabPress: (e) => {
             if (!isAuthenticated) {
               e.preventDefault();
-              router.push('/(onboarding)/Index');
+              router.push('/(onboarding)');
             }
           }
         })}
@@ -97,7 +97,7 @@ export default function TabLayout() {
           tabPress: (e) => {
             if (!isAuthenticated) {
               e.preventDefault();
-              router.push('/(onboarding)/Index');
+              router.push('/(onboarding)');
             }
           }
         })}

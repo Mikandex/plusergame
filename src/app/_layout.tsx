@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '../global.css';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
@@ -33,16 +34,10 @@ export default function RootLayout() {
   }
   
   return (
+    <SafeAreaProvider>
     <GestureHandlerRootView className='flex-1'>
       <BottomSheetModalProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="Splash" />
-          <Stack.Screen name="(onboarding)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(protected)" />
-          <Stack.Screen name="(landing)" />
-        </Stack>
+        <Stack screenOptions={{ headerShown: false }} />
         <Toast
         config={{
           success: (props) => (
@@ -104,5 +99,6 @@ export default function RootLayout() {
       <LayoutLoader/>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>
+    </SafeAreaProvider>
   )
 }

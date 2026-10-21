@@ -1,16 +1,7 @@
 import { Stack } from 'expo-router'
 
-const _layout = () => {
-
+export default function HomeLayout() {
   return (
-    <Stack screenOptions={{
-      headerShown: false
-    }}>
-      <Stack.Screen name='index'/>
-      <Stack.Screen name='Deposit'/>
-      <Stack.Screen name='Withdraw'/>
-    </Stack>
+    <Stack screenOptions={{ headerShown: false }} />
   )
 }
-
-export default _layout

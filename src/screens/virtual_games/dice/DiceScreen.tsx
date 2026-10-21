@@ -1,27 +1,37 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native'
-import React, { useEffect, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, AccessibilityInfo } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import Toast from 'react-native-toast-message'
-import { useAudioPlayer } from 'expo-audio';
 import { triggerHaptic } from '@/utils/vibration'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
-  cancelAnimation,
-} from 'react-native-reanimated'
-import { sounds } from '@/constants'
 import z from 'zod'
 import { useSfx } from '@/hooks/useSfx'
+import { useDiceGameAudio } from '@/hooks/useDiceGameAudio'
 import getWallet from '@/utils/WalletApi'
 import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import displayCurrency from '@/utils/displayCurrency'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import GameRulesSheet from '@/components/virtuals/GameRulesSheet'
+import RoundResultOverlay from '@/components/virtuals/RoundResultOverlay'
+import GameHistoryStrip from '@/components/virtuals/GameHistoryStrip'
+import GameStatsRow from '@/components/virtuals/GameStatsRow'
+import DiceTable from '@/components/virtuals/DiceTable'
+
+const DICE_COUNT = 2
+const RULES_KEY = 'plusergame.rules.dice.v1'
+const MIN_ROLL_MS = 1300
+
+const DICE_RULES = [
+  'You always roll two dice. Bets are on the total (2 through 12), not a single die.',
+  'Even / odd is the total. High is 7–12, low is 2–6.',
+  'Specific pays more: pick the exact total before you roll.',
+  'Stake ₦50–₦1,000. A win pays the multiplier shown into your wallet.',
+]
 
 const schema = z.object({
   stake: z.coerce.number()
@@ -30,44 +40,16 @@ const schema = z.object({
   bet_type: z.enum(['even', 'odd', 'highest', 'lowest', 'specific'], {
     message: "Please select a valid bet type",
   }),
-  guess: z.number().min(2).max(12, "Choose a number between 2 and 12")
-
-});
-
-const Dice = ({ value }: { value: number }) => {
-  const dots: Record<number, number[][]> = {
-    1: [[1,1]],
-    2: [[0,0],[2,2]],
-    3: [[0,0],[1,1],[2,2]],
-    4: [[0,0],[0,2],[2,0],[2,2]],
-    5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
-    6: [[0,0],[0,1],[0,2],[2,0],[2,1],[2,2]],
+  guess: z.number().min(2).max(12, "Choose a number between 2 and 12").optional(),
+}).superRefine((value, ctx) => {
+  if (value.bet_type === 'specific' && value.guess == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Pick a total from 2 to 12",
+      path: ["guess"],
+    })
   }
-
-  return (
-    <View style={styles.dice}>
-      <View style={styles.diceGrid}>
-        {[0,1,2].map(row =>
-          [0,1,2].map(col => {
-            const isActive = dots[value]?.some(
-              ([r,c]) => r === row && c === col
-            )
-
-            return (
-              <View
-                key={`${row}-${col}`}
-                style={[
-                  styles.dot,
-                  { opacity: isActive ? 1 : 0 }
-                ]}
-              />
-            )
-          })
-        )}
-      </View>
-    </View>
-  )
-}
+});
 
 type Result = {
   isWin: boolean
@@ -83,7 +65,6 @@ const DiceScreen = () => {
   const { top, bottom } = useSafeAreaInsets()
   const sfx = useSfx()
   const [stake, setStake] = useState("50")
-  const [diceCount, setDiceCount] = useState(2)
 
   const [mode, setMode] = useState<'even' | 'odd' | 'highest' | 'lowest' | 'specific'>('even')
   const [specificNumber, setSpecificNumber] = useState(2)
@@ -100,93 +81,49 @@ const DiceScreen = () => {
     totalDice: 2
   })
   const [history, setHistory] = useState<boolean[]>([])
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const [rolling, setRolling] = useState(false)
-  const [animDice, setAnimDice] = useState<number[]>(
-    Array.from({ length: diceCount }, () => 1)
-  );
 
-  const rollPlayer = useAudioPlayer(sounds.rollDice);
-  const winPlayer = useAudioPlayer(sounds.winDice);
-  const losePlayer = useAudioPlayer(sounds.rollDice);
-
-  const shake = useSharedValue(0)
-
-  const playSound = (type: 'roll' | 'win' | 'lose') => {
-    if (type === 'roll') {
-      rollPlayer.seekTo(0);
-      rollPlayer.play();
-    }
-
-    if (type === 'win') {
-      winPlayer.seekTo(0);
-      winPlayer.play();
-    }
-
-    if (type === 'lose') {
-      losePlayer.seekTo(0);
-      losePlayer.play();
-    }
-  };
+  const { playSound, stopRollSound: stopRollAudio } = useDiceGameAudio()
 
   const stopRollSound = () => {
-    rollPlayer.pause()
-    rollPlayer.seekTo(0)
-    stopShake()
-    // rollPlayer.loop = false
+    void stopRollAudio()
   }
-
-  rollPlayer.loop = true;
-  rollPlayer.volume = 0.7;
-  winPlayer.volume = 1.0;
-  losePlayer.volume = 1.0;
-
-  const startShake = () => {
-    shake.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 60 }),
-        withTiming(-1, { duration: 60 })
-      ),
-      -1, // infinite
-      true
-    )
-  }
-
-  const stopShake = () => {
-    cancelAnimation(shake)
-    shake.value = 0
-  }
-
-  const startRollingAnimation = () => {
-    setRolling(true)
-
-    const interval = setInterval(() => {
-      setAnimDice(prev =>
-        prev.map(() => Math.ceil(Math.random() * 6))
-      )
-    }, 500)
-
-    return interval
-  }
-
-  const shakeStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { translateX: shake.value * 6 },
-        { translateY: shake.value * 3 },
-        { rotate: `${shake.value * 6}deg` },
-      ],
-    }
-  })
 
   useEffect(() => {
-    setAnimDice(Array.from({ length: diceCount }, () => 1));
-  }, [diceCount]);
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    AsyncStorage.getItem(RULES_KEY)
+      .then((seen) => {
+        if (!seen) setRulesOpen(true)
+      })
+      .catch(() => {})
+  }, [])
+
+  const betHint = (() => {
+    if (mode === 'even') return 'Betting the total is even'
+    if (mode === 'odd') return 'Betting the total is odd'
+    if (mode === 'highest') return 'Betting the total is 7–12'
+    if (mode === 'lowest') return 'Betting the total is 2–6'
+    return `Betting the total is exactly ${specificNumber}`
+  })()
 
   const getSpecificNumbers = () => {
-    const min = diceCount
-    const max = diceCount * 6
-
+    const min = DICE_COUNT
+    const max = DICE_COUNT * 6
     return Array.from({ length: max - min + 1 }, (_, i) => i + min)
   }
 
@@ -209,20 +146,17 @@ const DiceScreen = () => {
       });
     }
 
-    console.log("VALIDATION PASSED, ROLLING WITH:", {
-      stake,
-      mode,
-      specificNumber: specificNumber
-    })
-
     try {
       setLoading(true)
-      setRolling(true)
+      setShowOverlay(false)
+      setResult((prev) => ({ ...prev, message: '' }))
 
-      const interval = startRollingAnimation() // start switching
-      startShake()
-      playSound('roll')
-      triggerHaptic('roll')
+      const started = Date.now()
+      if (!reduceMotion) {
+        setRolling(true)
+        playSound('roll')
+        triggerHaptic('roll')
+      }
 
       const res = await axiosClient.post("/virtual/dice", {
         bet_type: mode === "specific" ? "exact" : mode,
@@ -230,25 +164,32 @@ const DiceScreen = () => {
         ...(mode === "specific" && { guess: specificNumber }),
       })
 
-      console.log("ROLL RESULT", res.data)
-
-      clearInterval(interval) // STOP switching
-        
       const data = res.data
+      const game = data?.game
 
-      const correct: boolean = data.game.win
+      if (!game) {
+        throw new Error(data?.message || "The dice result did not come back. Try again.")
+      }
 
-      setHistory(prev => [correct, ...prev].slice(0, 20))
+      const wait = reduceMotion ? 0 : Math.max(0, MIN_ROLL_MS - (Date.now() - started))
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
 
+      const correct = Boolean(game.win)
+      const diceOne = Number(game.Dice_one ?? game.dice_one ?? 1)
+      const diceTwo = Number(game.Dice_two ?? game.dice_two ?? 1)
+
+      stopRollSound()
+      setHistory(prev => [correct, ...prev].slice(0, 12))
       setResult({
         isWin: correct,
         message: data.message,
-        payout: data.game.payout || 0,
-        multiplier: data.game.multiplier,
-        diceOne: data.game.Dice_one,
-        diceTwo: data.game.Dice_two,
-        totalDice: data.game.Total_dice
+        payout: Number(game.payout) || 0,
+        multiplier: game.multiplier,
+        diceOne,
+        diceTwo,
+        totalDice: Number(game.Total_Dice ?? game.Total_dice ?? diceOne + diceTwo)
       })
+      setRolling(false)
 
       if (correct) {
         sfx.win()
@@ -260,20 +201,21 @@ const DiceScreen = () => {
         playSound('lose')
       }
 
-      stopRollSound()
-      setRolling(false)
+      setShowOverlay(true)
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+      overlayTimer.current = setTimeout(() => setShowOverlay(false), 1800)
 
       setFetchWallet(true)
 
     } catch (error: any) {
       sfx.error()
-      setRolling(false)
-      stopRollSound()
       Toast.show({
         type: 'error',
-        text1: error?.response?.data?.message || "Something went wrong"
+        text1: getApiErrorMessage(error)
       })
     } finally {
+      stopRollSound()
+      setRolling(false)
       setLoading(false)
     }
   }
@@ -298,7 +240,7 @@ const DiceScreen = () => {
 
         {/* HEADER */}
         <View style={[styles.header, { marginTop: top }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
             <TouchableOpacity onPress={goBack}>
               <Feather name="chevron-left" size={30} color="#fff" />
             </TouchableOpacity>
@@ -307,65 +249,29 @@ const DiceScreen = () => {
               <Text>🎲</Text>
             </View>
 
-            <Text style={styles.title}>dice streak</Text>
+            <Text style={styles.title}>Dice streak</Text>
           </View>
 
-          <View style={styles.balanceBox}> 
-            <View> 
-              <Text style={styles.smallLabel}>PAYOUT</Text> 
-              <Text style={styles.goldText}>{result?.payout}</Text> 
-            </View> 
-            <View> 
-              <Text style={styles.smallLabel}>MULTIPLIER</Text> 
-              <Text style={styles.goldText}>{result?.multiplier}</Text> 
-            </View> 
-          </View>
+          <TouchableOpacity onPress={() => setRulesOpen(true)} style={styles.helpBtn} accessibilityLabel="How to play">
+            <Text style={styles.helpText}>?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <GameBalancePill />
         </View>
 
-        {/* CONTROLS */}
-        <View style={styles.row}>
-          <View style={styles.controlPill}>
-            <Text style={styles.controlLabel}>stake</Text>
-            <View style={styles.counterRow}>
-              <TextInput
-                value={stake}
-                onChangeText={(text) => setStake(text)}
-                keyboardType="numeric"
-                placeholder="Enter stake"
-                placeholderTextColor="#9fb7a9"
-                cursorColor="white"
-                style={{
-                  backgroundColor: "#0e2c40",
-                  borderRadius:16,
-                  borderWidth: 1,
-                  borderColor: "#caa85e",
-                  padding: 8,
-                  fontSize: 16,
-                  flex: 1,
-                  color: "#fff",
-                  textAlign: "center"
-                }}
-              />
-            </View>
-            
-          </View>
+        <GameStatsRow
+          stake={stake}
+          onStakeChange={setStake}
+          payout={result.payout ? displayCurrency(Number(result.payout)) : '—'}
+          multiplier={result.multiplier || '—'}
+          stakeEditable={!loading}
+        />
 
-          <View style={styles.controlPill}>
-            <Text style={styles.controlLabel}>dice</Text>
-            <View style={styles.counterRow}>
-              <TouchableOpacity disabled onPress={() => setDiceCount(Math.max(1, diceCount - 1))}>
-                <Text style={styles.counterBtn}>−</Text>
-              </TouchableOpacity>
-              <Text style={styles.counterValue}>{diceCount}</Text>
-              <TouchableOpacity disabled onPress={() => setDiceCount(Math.min(6, diceCount + 1))}>
-                <Text style={styles.counterBtn}>＋</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View style={styles.diceMeta}>
+          <Text style={styles.diceMetaLabel}>Two dice · total 2–12</Text>
+          <Text style={styles.diceMetaHint}>{betHint}</Text>
         </View>
 
         {/* MODES */}
@@ -403,14 +309,14 @@ const DiceScreen = () => {
               style={[styles.choiceBtn, mode === 'even' && styles.activeChoice]}
               onPress={() => { sfx.next(); setMode('even') }}
             >
-              <Text style={[styles.choiceText, mode === 'even' && styles.choiceActiveText]}>✅ EVEN</Text>
+              <Text style={[styles.choiceText, mode === 'even' && styles.choiceActiveText]}>Even</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.choiceBtn, mode === 'odd' && styles.activeChoice]}
               onPress={() => { sfx.next(); setMode('odd') }}
             >
-              <Text style={[styles.choiceText, mode === 'odd' && styles.choiceActiveText]}>🔴 ODD</Text>
+              <Text style={[styles.choiceText, mode === 'odd' && styles.choiceActiveText]}>Odd</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -421,14 +327,14 @@ const DiceScreen = () => {
               style={[styles.choiceBtn, mode === 'highest' && styles.activeChoice]}
               onPress={() => { sfx.next(); setMode('highest') }}
             >
-              <Text style={[styles.choiceText, mode === 'highest' && styles.choiceActiveText]}>⬆️ HIGH (&gt;6)</Text>
+              <Text style={[styles.choiceText, mode === 'highest' && styles.choiceActiveText]}>High (7–12)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.choiceBtn, mode === 'lowest' && styles.activeChoice]}
               onPress={() => { sfx.next(); setMode('lowest') }}
             >
-              <Text style={[styles.choiceText, mode === 'lowest' && styles.choiceActiveText]}>⬇️ LOW (≤6)</Text>
+              <Text style={[styles.choiceText, mode === 'lowest' && styles.choiceActiveText]}>Low (2–6)</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -452,54 +358,52 @@ const DiceScreen = () => {
           </View>
         )}
 
-        <View style={{ flexDirection: "row", justifyContent: "center", flexWrap: "wrap", marginTop: 20, width:"100%" }}>
-          {Array.from({ length: diceCount }).map((_, i) => {
-            const finalDice = [result.diceOne, result.diceTwo]
-            return (
-            <Animated.View key={i} style={rolling ? shakeStyle : undefined}>
-              <Dice
-                value={
-                  rolling
-                    ? animDice[i] || 1   // LIVE changing values
-                    : finalDice[i] || 1 //final result
-                }
-              />
-            </Animated.View>
-          )})}
-        </View>
+        <LinearGradient
+          colors={['#061a22', '#0a3340', '#07141c']}
+          start={[0.5, 0]}
+          end={[0.5, 1]}
+          style={styles.table}
+        >
+          <View style={styles.tableGlow} />
+          <DiceTable
+            left={result.diceOne || 1}
+            right={result.diceTwo || 1}
+            rolling={rolling}
+            reduceMotion={reduceMotion}
+          />
+          {!rolling && result.message ? (
+            <Text style={styles.totalLabel}>Total {result.totalDice}</Text>
+          ) : rolling ? (
+            <Text style={styles.totalLabel}>Rolling…</Text>
+          ) : (
+            <Text style={styles.totalLabel}>Ready to roll</Text>
+          )}
+          <RoundResultOverlay
+            visible={showOverlay}
+            isWin={result.isWin}
+            title={result.isWin ? 'You hit it' : 'Not this roll'}
+            detail={
+              result.isWin
+                ? `+${displayCurrency(Number(result.payout || 0))}`
+                : `Total was ${result.totalDice}`
+            }
+            reduceMotion={reduceMotion}
+          />
+        </LinearGradient>
 
         {/* RESULT */}
-        {result && (
-          <View style={styles.resultBox}>
-            {loading ? (
-              <Text style={styles.betText}>Rolling...</Text>
-            ) : !result?.message ? (
-              <Text style={styles.betText}>🎲 Place your bet</Text>
-            ) : (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                {result?.isWin ? (
-                  <>
-                    <Text className="text-white text-3xl">✅</Text>
-                    <Text className="text-white font-msbold text-xl">
-                      WIN! 🎉 <Text style={{ fontWeight: "700", textTransform: "uppercase" }}>+{result?.payout}</Text>
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text className="text-white text-3xl">❌</Text>
-                    <Text className="text-white font-msbold text-xl">
-                      LOSE 🤕 <Text style={{ fontWeight: "700", textTransform: "uppercase" }}>-{stake}</Text>
-                    </Text>
-                  </>
-                )}
-              </View>
-            )}
-
-            <Text style={{ color: "#c7d6df" }}>
-              {result?.multiplier}
+        <View style={styles.resultBox}>
+          {loading ? (
+            <Text style={styles.betText}>Rolling both dice…</Text>
+          ) : !result?.message ? (
+            <Text style={styles.betText}>{betHint}. Then roll.</Text>
+          ) : (
+            <Text style={styles.betText}>
+              {result.isWin ? 'Win' : 'Loss'} · total {result.totalDice}
             </Text>
-          </View>
-        )}
+          )}
+          <Text style={{ color: "#c7d6df" }}>{result?.multiplier}</Text>
+        </View>
 
         {/* ROLL */}
         <TouchableOpacity style={styles.rollBtn} onPress={handleRoll} disabled={loading}>
@@ -509,39 +413,25 @@ const DiceScreen = () => {
               <Text style={styles.rollText}>ROLLING...</Text>
             </View>
           ) : (
-            <Text style={styles.rollText}>🎲 ROLL DICE</Text>
+            <Text style={styles.rollText}>{loading ? 'ROLLING…' : 'ROLL DICE'}</Text>
           )}
         </TouchableOpacity>
 
-        {/* LAST ROLLS */}
-        <View style={[styles.footer, { marginBottom: bottom }]}>
-          <Text style={styles.footerText}>📋 last rolls 🔊 sound on</Text>
-          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            {history.length <= 0 ? (
-              <Text className='text-white text-xl italic'>roll the dice</Text>
-            ) : (
-              history.map((h, i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: h ? '#5fd48c' : '#e06969'
-                  }}
-                >
-                  <Text style={{ color: '#ffeca6' }}>
-                    {h ? '✅' : '❌'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
+        <View style={{ marginBottom: bottom }}>
+          <GameHistoryStrip history={history} emptyLabel="Roll to start a streak" />
         </View>
 
       </ScrollView>
+
+      <GameRulesSheet
+        visible={rulesOpen}
+        title="How Dice streak works"
+        steps={DICE_RULES}
+        onClose={() => {
+          setRulesOpen(false)
+          void AsyncStorage.setItem(RULES_KEY, '1')
+        }}
+      />
     </LinearGradient>
   )
 }
@@ -579,6 +469,73 @@ const styles = StyleSheet.create({
     color: "#dbe7ee",
     fontSize: 20,
     fontWeight: "600",
+  },
+
+  helpBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#caa85e",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  helpText: {
+    color: "#e6e1c5",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  diceMeta: {
+    gap: 4,
+  },
+
+  diceMetaLabel: {
+    color: "#f6d98a",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+
+  diceMetaHint: {
+    color: "#9fb7c3",
+    fontSize: 14,
+  },
+
+  table: {
+    minHeight: 260,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    borderRadius: 28,
+    paddingVertical: 28,
+    paddingHorizontal: 12,
+    borderColor: "rgba(202,168,94,0.35)",
+  },
+
+  tableGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(212,175,55,0.12)",
+    top: 20,
+  },
+
+  diceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+
+  totalLabel: {
+    color: "#e6e1c5",
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: 14,
+    zIndex: 1,
   },
 
   balanceBox: {
@@ -637,9 +594,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  counterBtn: {
-    fontSize: 22,
-    color: "#c7d6df",
+  lockedHint: {
+    color: "#7fa6b8",
+    fontSize: 11,
+    marginTop: 4,
   },
 
   /* MODE TABS */
@@ -753,14 +711,14 @@ const styles = StyleSheet.create({
   /* ROLL BUTTON */
   rollBtn: {
     marginTop: 10,
-    backgroundColor: "#4fa3d1",
+    backgroundColor: "#d4af37",
     padding: 20,
     borderRadius: 40,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: "#d4af37",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 8,
   },
 
   rollText: {
@@ -783,31 +741,5 @@ const styles = StyleSheet.create({
     color: "#c7d6df",
     fontSize: 16,
     marginBottom: 10,
-  },
-
-  dice: {
-    width: 70,
-    height: 70,
-    borderRadius: 10,
-    backgroundColor: "#e6d9c3",
-    justifyContent: "center",
-    alignItems: "center",
-    margin: 8,
-  },
-
-  diceGrid: {
-    width: "70%",
-    height: "70%",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignContent: "space-between",
-  },
-
-  dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#000",
   },
 })

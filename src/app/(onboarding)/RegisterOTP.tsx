@@ -27,6 +27,8 @@ import { useLoaderStore } from '@/store/loaderStore';
 import Toast from 'react-native-toast-message';
 import { useProfileStore } from '@/store/ProfileStore';
 
+const OTP_LENGTH = 6;
+
 export default function RegisterOTP() {
 
   const bottom = useSafeAreaInsets().bottom;
@@ -35,8 +37,8 @@ export default function RegisterOTP() {
    const { isLoading, setLoading } = useLoaderStore()
 
   const [otp, setOtp] = useState('')
-  const { phone } = useLocalSearchParams() as any;
-  const parsedPhone = phone ? JSON.parse(phone) : null
+  const { user } = useLocalSearchParams() as { user?: string };
+  const parsedPhone = user ? JSON.parse(user) : null;
 
   const [resendLoading, setResendLoading] = useState(false)
   const [resend, setResend] = useState(false)
@@ -54,10 +56,10 @@ export default function RegisterOTP() {
         });
     }
 
-    if(otp.length < 4){
+    if (otp.length < OTP_LENGTH) {
         return Toast.show({
             type: 'info',
-            text1: "OTP needs 4 numbers",
+            text1: `OTP needs ${OTP_LENGTH} numbers`,
             text2: "Please check your inputs.",
         });
     }
@@ -154,11 +156,11 @@ export default function RegisterOTP() {
               {/* Form Card */}
               <View className="bg-charcoal-light rounded-3xl p-6" style={{ marginBottom: bottom + 16 }}>
 
-                <Text className="text-base text-center text-white mt-1 font-mmedium">Enter the 4 digits OTP code sent to your phone number</Text>
+                <Text className="text-base text-center text-white mt-1 font-mmedium">Enter the 6 digits OTP code sent to your phone number</Text>
                 <View className='mt-7'>
                     <OtpInput
                         key={emailKey}
-                        numberOfDigits={4}
+                        numberOfDigits={OTP_LENGTH}
                         onTextChange={(code) => setOtp(code)}
                         theme={{
                             containerStyle: styles.container,

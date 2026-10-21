@@ -75,8 +75,8 @@ export default function DepositScreen() {
         setLoading(true)
     
         const result = await axiosClient.post("/wallet/fund", { amount: Number(form.amount), payment_method: "nomba" })
-        console.log(result.data)
-    
+
+        const fundedAmount = String(form.amount)
         setForm({
           means: '',
           amount: '',
@@ -85,7 +85,12 @@ export default function DepositScreen() {
     
         router.push({
             pathname: "/(protected)/(routes)/DepositPaymentGateway",
-            params: { paylink: result.data.checkout_link }
+            params: {
+              paylink: result.data.checkout_link,
+              reference: result.data.reference || '',
+              transaction_reference: result.data.transaction_reference || '',
+              amount: fundedAmount,
+            }
         })
     
       } catch (error: any) {

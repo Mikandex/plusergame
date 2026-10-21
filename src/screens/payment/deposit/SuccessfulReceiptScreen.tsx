@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect } from "react";
 import {
   View,
@@ -19,6 +19,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Octicons, Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import CustomButton from "@/components/CustomButton";
+import displayCurrency from "@/utils/displayCurrency";
+import moment from "moment";
 
 const NOTCH_RADIUS = 18;
 
@@ -29,18 +31,31 @@ type ReceiptRow = {
   multiline?: boolean;
 };
 
-const rows: ReceiptRow[] = [
-  {label: "Recipient Details", value: "JOHN DOE\nFirst Bank of Nigeria | 2020362609"},
-  { label: "Amount",           value: "₦5,000,000.00" },
-  { label: "Naration",         value: "Personal withdraw" },
-  { label: "Transaction No.",  value: "56478786768798076677069​8", copyable: true },
-  { label: "Transaction Date", value: "Feb. 10th 2025   4:00 PM" },
-  { label: "Session ID",       value: "436755668758658798686869​373698379", copyable: true },
-];
+function paramText(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
 
 export default function SuccessfulReceiptScreen() {
 
   const { top, bottom } = useSafeAreaInsets();
+  const receiptParams = useLocalSearchParams() as {
+    reference?: string | string[]
+    transaction_reference?: string | string[]
+    amount?: string | string[]
+    outcome?: string | string[]
+    payment_status?: string | string[]
+    paid_at?: string | string[]
+  }
+  const amount = paramText(receiptParams.amount)
+  const txRef = paramText(receiptParams.transaction_reference) || paramText(receiptParams.reference)
+  const paidAt = paramText(receiptParams.paid_at)
+  const rows: ReceiptRow[] = [
+    { label: "Amount", value: amount ? displayCurrency(Number(amount)) : "—" },
+    { label: "Type", value: "Wallet deposit" },
+    { label: "Method", value: "Nomba" },
+    { label: "Reference", value: txRef || "—", copyable: Boolean(txRef) },
+    { label: "Date", value: paidAt && !paidAt.startsWith("0001") ? moment(paidAt).format("llll") : moment().format("llll") },
+  ]
 
   const headerOpacity    = useSharedValue(0);
   const headerTranslateY = useSharedValue(40);

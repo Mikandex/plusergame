@@ -1,18 +1,16 @@
 import { View, ImageBackground, Image, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { images } from '@/constants';
 import CustomButton from '@/components/CustomButton';
 import { router } from 'expo-router';
-import { AntDesign, Octicons } from '@expo/vector-icons';
-import { use } from 'react';
+import { Octicons } from '@expo/vector-icons';
 
-export default function Index() {
-
-  const top = useSafeAreaInsets().top;
+export default function OnboardingIndex() {
+  const { top } = useSafeAreaInsets();
 
   return (
-    <SafeAreaProvider>
+    <>
       <SafeAreaView className='flex-1' edges={['left', 'right']}>
         <ImageBackground source={images.splash} resizeMode="cover" className='flex-1 justify-center'>
           <Pressable
@@ -33,6 +31,6 @@ export default function Index() {
         </ImageBackground>
       </SafeAreaView>
       <StatusBar style="light" />
-    </SafeAreaProvider>
+    </>
   );
 }

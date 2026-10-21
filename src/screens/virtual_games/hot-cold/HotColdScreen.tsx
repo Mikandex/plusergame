@@ -1,119 +1,165 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native'
-import React, { useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, AccessibilityInfo } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
-import { z } from "zod"
+import { z } from 'zod'
 import Toast from 'react-native-toast-message'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
 import GameBalancePill from '@/components/virtuals/GameBalancePill'
 import getUnreadNotifications from '@/utils/getUnreadNotifications'
 import { axiosClient } from '@/globalApi'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import displayCurrency from '@/utils/displayCurrency'
+import { triggerHaptic } from '@/utils/vibration'
+import GameRulesSheet from '@/components/virtuals/GameRulesSheet'
+import RoundResultOverlay from '@/components/virtuals/RoundResultOverlay'
+import GameHistoryStrip from '@/components/virtuals/GameHistoryStrip'
+import GameStatsRow from '@/components/virtuals/GameStatsRow'
+import LotteryBall from '@/components/virtuals/LotteryBall'
+import HotColdMeter, { heatOf } from '@/components/virtuals/HotColdMeter'
 
 const ranges = [
-  { label: "1-10", max: 10 },
-  { label: "1-20", max: 20 },
-  { label: "1-30", max: 30 },
+  { label: '1-10', max: 10, pot: 'pot1', pay: '10x' },
+  { label: '1-20', max: 20, pot: 'pot2', pay: '20x' },
+  { label: '1-30', max: 30, pot: 'pot3', pay: '30x' },
 ]
 
-type Bet = 'heads' | 'tails' | 'edge' | null
+const RULES_KEY = 'plusergame.rules.hotcold.v1'
+const REVEAL_MS = 900
+
+const HOTCOLD_RULES = [
+  'Pick a range, then one number in that range. Your stake is taken when you reveal.',
+  'The house draws one number from the same range. Only an exact match pays.',
+  'After the reveal, hot means you were close and cold means you were far. Close does not pay.',
+  'Wider range, bigger multiplier: 1–10 pays 10x, 1–20 pays 20x, 1–30 pays 30x. Stake ₦50–₦1,000.',
+]
+
 type Result = {
   isWin: boolean
   message: string
   payout: number
   multiplier: string
-  systemPick: Bet
-  userPick: Bet
+  house: number
+  guess: number
 }
 
 const schema = z.object({
-  stake: z.coerce.number()
-    .min(50, "Minimum stake is 50")
-    .max(1000, "Maximum stake is 1000"),
-  pick: z.number().min(1, "Pick a number"),
+  stake: z.coerce.number().min(50, 'Minimum stake is 50').max(1000, 'Maximum stake is 1000'),
+  pick: z.number().min(1, 'Pick a number first'),
 })
 
 const HotColdScreen = () => {
   const { top, bottom } = useSafeAreaInsets()
-  const [stake, setStake] = useState("50")
+  const sfx = useSfx()
+  const [stake, setStake] = useState('50')
   const [loading, setLoading] = useState(false)
   const [fetchWallet, setFetchWallet] = useState(false)
   const [result, setResult] = useState<Result>({
     isWin: false,
-    message: "",
+    message: '',
     payout: 0,
-    multiplier: "10x",
-    systemPick: null,
-    userPick: null
+    multiplier: '10x',
+    house: 0,
+    guess: 0,
   })
   const [history, setHistory] = useState<boolean[]>([])
-  const sfx = useSfx()
   const [selectedRange, setSelectedRange] = useState(ranges[0])
-  const [selectedNumber, setSelectedNumber] = useState<number>(0)
+  const [selectedNumber, setSelectedNumber] = useState(0)
+  const [showOverlay, setShowOverlay] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const numbers = Array.from({ length: selectedRange.max }, (_, i) => i + 1)
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => setReduceMotion(false))
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion)
+    return () => {
+      sub?.remove?.()
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    AsyncStorage.getItem(RULES_KEY)
+      .then((seen) => {
+        if (!seen) setRulesOpen(true)
+      })
+      .catch(() => {})
+  }, [])
 
   const handleGuess = async () => {
     if (loading) return
 
-    const result = schema.safeParse({ stake, pick: selectedNumber, });
-    
-    if (!result.success) {
-      const firstIssue = result.error.issues[0];
-
+    const parsed = schema.safeParse({ stake, pick: selectedNumber })
+    if (!parsed.success) {
       return Toast.show({
         type: 'info',
-        text1: firstIssue.message,
-      });
+        text1: parsed.error.issues[0].message,
+      })
     }
-
-    sfx.flip()
 
     try {
       setLoading(true)
+      setShowOverlay(false)
+      setResult((prev) => ({ ...prev, message: '' }))
+      sfx.flip()
+      triggerHaptic('roll')
 
-      const res = await axiosClient.post("/virtual/guess", {
-        game_type: selectedRange.label === "1-10" ? "pot1" : selectedRange.label === "1-20" ? "pot2" : "pot3",
+      const started = Date.now()
+      const res = await axiosClient.post('/virtual/guess', {
+        game_type: selectedRange.pot,
         pick: selectedNumber,
-        stake: Number(stake)
+        stake: Number(stake),
       })
-      console.log("RESULT", res.data)
 
       const data = res.data
-
-      const correct: boolean = data.game.is_win
- 
-      //outcome sound
-      if (correct) {
-        sfx.win()
-      } else {
-        sfx.lose()
+      const game = data?.game
+      if (!game) {
+        throw new Error(data?.message || 'The house number did not come back. Try again.')
       }
 
-      setHistory(prev => [correct, ...prev].slice(0, 20))
+      const wait = reduceMotion ? 0 : Math.max(0, REVEAL_MS - (Date.now() - started))
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
 
+      const correct = Boolean(game.is_win)
+      const house = Number(game.system_number)
+      const guess = Number(game.user_picked_number || selectedNumber)
+
+      setHistory((prev) => [correct, ...prev].slice(0, 12))
       setResult({
         isWin: correct,
         message: data.message,
-        payout: data.game.payout || 0,
-        multiplier: data.game.multiplier,
-        systemPick: data.game.system_number,
-        userPick: data.game.user_picked_number
+        payout: game.payout || 0,
+        multiplier: game.multiplier || selectedRange.pay,
+        house,
+        guess,
       })
-      setSelectedNumber(0)
 
+      if (correct) {
+        sfx.win()
+        triggerHaptic('win')
+      } else {
+        sfx.lose()
+        triggerHaptic('lose')
+      }
+
+      setShowOverlay(true)
+      if (overlayTimer.current) clearTimeout(overlayTimer.current)
+      overlayTimer.current = setTimeout(() => setShowOverlay(false), 1800)
       setFetchWallet(true)
-
-    } catch (error: any) {
+    } catch (error: unknown) {
       sfx.error()
       Toast.show({
         type: 'error',
-        text1:
-          error?.response?.data?.message?.stake ||
-          error?.response?.data?.message ||
-          "Something went wrong",
+        text1: getApiErrorMessage(error),
       })
     } finally {
       setLoading(false)
@@ -121,79 +167,54 @@ const HotColdScreen = () => {
   }
 
   const goBack = () => {
-    if(fetchWallet){
+    if (fetchWallet) {
       getWallet(false)
-      getUnreadNotifications();
+      getUnreadNotifications()
     }
     router.back()
   }
 
+  const heat = result.house && result.guess ? heatOf(result.guess, result.house, selectedRange.max) : null
+  const overlayTitle =
+    heat === 'hit' ? 'Exact hit' : heat === 'hot' ? 'Hot — no pay' : heat === 'warm' ? 'Warm — no pay' : 'Cold'
+
   return (
-    <LinearGradient
-      colors={["#0b2a3a", "#061c26"]}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#0b2a3a', '#061c26']} style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", gap: 20, padding: 12 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between', gap: 16, padding: 12 }}
       >
-        {/* HEADER */}
-        <View className='flex-row items-center gap-1' style={{ marginTop: top }}>
-          <TouchableOpacity activeOpacity={0.8} onPress={goBack}>
-            <Feather name="chevron-left" size={34} color="#e6e1c5" />
-          </TouchableOpacity>
-          <View style={styles.header}>
+        <View style={[styles.header, { marginTop: top }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <TouchableOpacity onPress={goBack} accessibilityLabel="Back">
+              <Feather name="chevron-left" size={30} color="#e6e1c5" />
+            </TouchableOpacity>
             <View style={styles.logo}>
-              <Text style={{ fontSize: 18 }}>🔢</Text>
+              <Text>🌡️</Text>
             </View>
-            <Text style={styles.title}>hot/cold guess</Text>
+            <Text style={styles.title}>Hot / cold</Text>
           </View>
+          <TouchableOpacity onPress={() => setRulesOpen(true)} style={styles.helpBtn} accessibilityLabel="How to play">
+            <Text style={styles.helpText}>?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <GameBalancePill />
         </View>
 
-        {/* RANGE INFO */}
-        <View style={styles.row}>
-          <View style={styles.controlPill}>
-            <Text style={styles.controlLabel}>STAKE</Text>
-            <View style={styles.counterRow}>
-              <TextInput
-                value={stake}
-                onChangeText={(text) => setStake(text)}
-                keyboardType="numeric"
-                placeholder="Enter stake"
-                placeholderTextColor="#9fb7a9"
-                cursorColor="white"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  borderRadius:16,
-                  borderWidth: 1,
-                  borderColor: "#caa85e",
-                  padding: 8,
-                  fontSize: 16,
-                  flex: 1,
-                  color: "#fff",
-                  textAlign: "center"
-                }}
-              />
-            </View>
-          </View>
+        <GameStatsRow
+          stake={stake}
+          onStakeChange={setStake}
+          payout={result.payout ? displayCurrency(Number(result.payout)) : '—'}
+          multiplier={result.multiplier || selectedRange.pay}
+          stakeEditable={!loading}
+        />
 
-          <View style={styles.rangeInfo}>
-            <View>
-              <Text style={styles.label}>Payout</Text>
-              <Text style={styles.gold}>{result?.payout}</Text>
-            </View>
-            <View>
-              <Text style={styles.label}>MULTIPLIER</Text>
-              <Text style={styles.gold}>{result?.multiplier}</Text>
-            </View>
-          </View>
-        </View>
+        <Text style={styles.explain}>
+          Guess the house number. Hot is close. Only exact pays.
+        </Text>
 
-        {/* RANGE SELECT */}
         <View style={styles.rangeRow}>
           {ranges.map((r) => {
             const active = r.label === selectedRange.label
@@ -201,128 +222,111 @@ const HotColdScreen = () => {
               <TouchableOpacity
                 key={r.label}
                 style={[styles.rangeBtn, active && styles.activeRange]}
+                disabled={loading}
                 onPress={() => {
+                  sfx.next()
                   setSelectedRange(r)
                   setSelectedNumber(0)
-                  if(!loading) setResult(prev => ({
-                    ...prev,
-                    message: "",
-                    multiplier: `${r.max}x`
-                  }))  
+                  setShowOverlay(false)
+                  setResult({
+                    isWin: false,
+                    message: '',
+                    payout: 0,
+                    multiplier: r.pay,
+                    house: 0,
+                    guess: 0,
+                  })
                 }}
               >
-                <Text style={active ? styles.activeText : styles.rangeText}>
-                  {r.label}
-                </Text>
+                <Text style={active ? styles.activeText : styles.rangeText}>{r.label}</Text>
+                <Text style={styles.rangePay}>{r.pay}</Text>
               </TouchableOpacity>
             )
           })}
         </View>
 
-        {/* NUMBER GRID */}
         <View style={styles.gridBox}>
           <View style={styles.grid}>
             {numbers.map((num) => {
-              const active = num === selectedNumber
+              const picked = num === selectedNumber
+              const house = result.house === num && Boolean(result.message)
+              const hit = picked && house
+              const tone = hit ? 'hit' : house ? 'drawn' : picked ? 'picked' : 'idle'
               return (
                 <TouchableOpacity
                   key={num}
-                  style={[styles.circle, active && styles.activeCircle]}
-                  onPress={() => { 
+                  disabled={loading}
+                  onPress={() => {
                     sfx.next()
                     setSelectedNumber(num)
-                    if(!loading) setResult(prev => ({
-                      ...prev,
-                      message: ""
-                    })) 
+                    setShowOverlay(false)
+                    setResult((prev) => ({ ...prev, message: '', house: 0, guess: 0, payout: 0 }))
                   }}
                 >
-                  <Text style={styles.circleText}>{num}</Text>
+                  <LotteryBall n={num} size={48} tone={tone} />
                 </TouchableOpacity>
               )
             })}
           </View>
         </View>
 
-        {/* PICK BOX */}
-        <View style={styles.pickBox}>
-            {loading ? (
-              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <Text style={{ fontSize: 18, fontWeight: "900", color: "#fff" }}>Loading...</Text>
-              </View>
-            ) : !selectedNumber && !result?.message ? (
-              <Text style={styles.pickText}>🤔 pick a number</Text>
-            ) : result?.message ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                {result?.isWin ? (
-                  <>
-                    <Text className="text-white text-3xl">✅</Text>
-                    <Text className="text-white font-msbold text-xl">
-                      🎯 🎉 WIN! it was<Text style={{ fontWeight: "700", textTransform: "uppercase" }}>{result?.systemPick}</Text>
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text className="text-white text-3xl">🌡️ ❌</Text>
-                    <Text className="text-white font-msbold text-xl">
-                      LOSS. It was <Text style={{ fontWeight: "700", textTransform: "uppercase" }}>{result?.systemPick}</Text>
-                    </Text>
-                  </>
-                )}
-              </View>
-            ) : (
-              <Text style={styles.pickText}>
-                🤔 picked {selectedNumber}
-              </Text>
-            )}
-
-          <View style={styles.multiplierPill}>
-            <Text style={styles.multiplierText}>
-              {result?.multiplier}
-            </Text>
-          </View>
+        {result.message && result.house && result.guess ? (
+          <HotColdMeter guess={result.guess} house={result.house} max={selectedRange.max} />
+        ) : null}
+        <View style={{ height: showOverlay ? 96 : 0, position: 'relative' }}>
+          <RoundResultOverlay
+            visible={showOverlay}
+            isWin={result.isWin}
+            title={result.isWin ? 'Exact hit' : overlayTitle}
+            detail={
+              result.isWin
+                ? `+${displayCurrency(Number(result.payout || 0))}`
+                : `House ${result.house}`
+            }
+            reduceMotion={reduceMotion}
+          />
         </View>
 
-        {/* ACTION BUTTON */}
-        <TouchableOpacity className={`${loading || !selectedNumber ? 'opacity-60' : ''}`} style={styles.playBtn} onPress={handleGuess} disabled={loading}>
+        <View style={styles.pickBox}>
+          <Text style={styles.pickText}>
+            {loading
+              ? 'House is drawing…'
+              : selectedNumber
+                ? `Calling ${selectedNumber} in ${selectedRange.label}`
+                : `Pick one number from ${selectedRange.label}`}
+          </Text>
+          <Text style={styles.multiHint}>{result.multiplier || selectedRange.pay}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.playBtn, (loading || !selectedNumber) && styles.playBusy]}
+          onPress={handleGuess}
+          disabled={loading}
+        >
           {loading ? (
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <ActivityIndicator color="#000" />
-              <Text style={{ fontSize: 18, fontWeight: "900" }}>Loading...</Text>
+              <ActivityIndicator color="#0b1d26" />
+              <Text style={styles.playText}>REVEALING…</Text>
             </View>
           ) : (
-             <Text style={styles.playText}>🎯 guess & reveal</Text>
+            <Text style={styles.playText}>REVEAL</Text>
           )}
         </TouchableOpacity>
 
-        {/* FOOTER */}
-        <View style={[styles.footer, { marginBottom: bottom }]}>
-          <Text style={styles.footerText}>📋 last rolls 🔊 sound on</Text>
-          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            {history.length <= 0 ? (
-              <Text className='text-white text-xl italic'>Make a guess</Text>
-            ) : (
-              history.map((h, i) => (
-                <View
-                  key={i}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.06)",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    borderLeftWidth: 4,
-                    borderLeftColor: h ? '#5fd48c' : '#e06969'
-                  }}
-                >
-                  <Text style={{ color: '#ffeca6' }}>
-                    {h ? '✅' : '❌'}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
+        <View style={{ marginBottom: bottom }}>
+          <GameHistoryStrip history={history} emptyLabel="Guess to start a streak" />
         </View>
       </ScrollView>
+
+      <GameRulesSheet
+        visible={rulesOpen}
+        title="How Hot / cold works"
+        steps={HOTCOLD_RULES}
+        onClose={() => {
+          setRulesOpen(false)
+          void AsyncStorage.setItem(RULES_KEY, '1')
+        }}
+      />
     </LinearGradient>
   )
 }
@@ -332,199 +336,117 @@ export default HotColdScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between",
   },
-
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#12394a",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  title: {
-    color: "#dbe7ee",
-    fontSize: 20,
-    fontWeight: "600",
-  },
-
-  row: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "stretch",
-  },
-
-  controlPill: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 25,
-    padding: 16
-  },
-
-  controlLabel: {
-    fontSize: 12,
-    color: "#9fb7a9",
-    marginBottom: 6,
-  },
-
-  counterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 6
-  },
-
-  rangeInfo: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    padding: 16,
-    borderRadius: 25,
-    gap: 10,
-  },
-
-  label: {
-    color: "#7fa6b8",
-    fontSize: 12,
-  },
-
-  gold: {
-    color: "#f6d98a",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-
-  rangeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-
-  rangeBtn: {
-    flex: 1,
-    backgroundColor: "#173b4c",
-    padding: 16,
-    borderRadius: 25,
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-
-  activeRange: {
-    borderWidth: 2,
-    borderColor: "#e3a843",
-  },
-
-  rangeText: {
-    color: "#c7d6df",
-  },
-
-  activeText: {
-    color: "#f6d98a",
-    fontWeight: "bold",
-  },
-
-  gridBox: {
-    backgroundColor: "#173b4c",
-    borderRadius: 30,
-    padding: 20,
-  },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10
-  },
-
-  circle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#e6e3da",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-
-  activeCircle: {
-    backgroundColor: "#e3a843",
-  },
-
-  circleText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1b2a34",
-  },
-
-  pickBox: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: "#2f5668",
-    padding: 18,
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
   },
-
-  pickText: {
-    color: "#c7d6df",
-    fontSize: 18,
+  logo: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#12394a',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
-  multiplierPill: {
-    backgroundColor: "#e3a843",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    flexShrink: 0 
-  },
-
-  multiplierText: {
-    color: "#1b2a34",
-    fontWeight: "bold",
-  },
-
-  playBtn: {
-    backgroundColor: "#4fa3d1",
-    padding: 20,
-    borderRadius: 40,
-    alignItems: "center",
-  },
-
-  playText: {
-    color: "#0b1d26",
+  title: {
+    color: '#dbe7ee',
     fontSize: 20,
-    fontWeight: "900",
+    fontWeight: '700',
   },
-
-  footer: {
-    gap: 4,
-    backgroundColor: '#163447',
-    padding: 12,
-    borderRadius: 25,
+  helpBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#2f5668",
+    borderColor: 'rgba(202,168,94,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  footerText: {
-    color: "#e6e1c5",
-    fontSize: 16,
-    marginBottom: 10,
-  }
+  helpText: {
+    color: '#e6d59b',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  explain: {
+    color: '#c7d6df',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rangeBtn: {
+    flex: 1,
+    backgroundColor: '#173b4c',
+    paddingVertical: 12,
+    borderRadius: 18,
+    alignItems: 'center',
+  },
+  activeRange: {
+    borderWidth: 2,
+    borderColor: '#e3a843',
+  },
+  rangeText: {
+    color: '#c7d6df',
+    fontWeight: '600',
+  },
+  activeText: {
+    color: '#f6d98a',
+    fontWeight: '800',
+  },
+  rangePay: {
+    color: '#9fb7a9',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  gridBox: {
+    backgroundColor: '#173b4c',
+    borderRadius: 24,
+    padding: 16,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  pickBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#2f5668',
+    padding: 16,
+    gap: 8,
+  },
+  pickText: {
+    color: '#c7d6df',
+    fontSize: 15,
+    flex: 1,
+    paddingRight: 8,
+  },
+  multiHint: {
+    color: '#e6d59b',
+    fontWeight: '700',
+  },
+  playBtn: {
+    backgroundColor: '#e3a843',
+    padding: 18,
+    borderRadius: 40,
+    alignItems: 'center',
+  },
+  playBusy: {
+    opacity: 0.6,
+  },
+  playText: {
+    color: '#0b1d26',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 })

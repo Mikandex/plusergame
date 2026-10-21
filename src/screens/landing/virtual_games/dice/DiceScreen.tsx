@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import Toast from 'react-native-toast-message'
-import { useAudioPlayer } from 'expo-audio';
+import { useDiceGameAudio } from '@/hooks/useDiceGameAudio'
 import { triggerHaptic } from '@/utils/vibration'
 import Animated, {
   useSharedValue,
@@ -15,7 +15,6 @@ import Animated, {
   withSequence,
   cancelAnimation,
 } from 'react-native-reanimated'
-import { sounds } from '@/constants'
 import z from 'zod'
 import { useSfx } from '@/hooks/useSfx'
 
@@ -101,40 +100,14 @@ const DiceScreen = () => {
     Array.from({ length: diceCount }, () => 1)
   );
 
-  const rollPlayer = useAudioPlayer(sounds.rollDice);
-  const winPlayer = useAudioPlayer(sounds.winDice);
-  const losePlayer = useAudioPlayer(sounds.rollDice);
+  const { playSound, stopRollSound: stopRollAudio } = useDiceGameAudio()
 
   const shake = useSharedValue(0)
 
-  const playSound = (type: 'roll' | 'win' | 'lose') => {
-    if (type === 'roll') {
-      rollPlayer.seekTo(0);
-      rollPlayer.play();
-    }
-
-    if (type === 'win') {
-      winPlayer.seekTo(0);
-      winPlayer.play();
-    }
-
-    if (type === 'lose') {
-      losePlayer.seekTo(0);
-      losePlayer.play();
-    }
-  };
-
   const stopRollSound = () => {
-    rollPlayer.pause()
-    rollPlayer.seekTo(0)
+    void stopRollAudio()
     stopShake()
-    // rollPlayer.loop = false
   }
-
-  rollPlayer.loop = true;
-  rollPlayer.volume = 0.7;
-  winPlayer.volume = 1.0;
-  losePlayer.volume = 1.0;
 
   const startShake = () => {
     shake.value = withRepeat(

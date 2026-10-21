@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect } from "react";
 import {
   View,
@@ -19,6 +19,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Octicons, Feather } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import CustomButton from "@/components/CustomButton";
+import displayCurrency from "@/utils/displayCurrency";
+import moment from "moment";
 
 const NOTCH_RADIUS = 18;
 
@@ -29,18 +31,29 @@ type ReceiptRow = {
   multiline?: boolean;
 };
 
-const rows: ReceiptRow[] = [
-  {label: "Recipient Details", value: "JOHN DOE\nFirst Bank of Nigeria | 2020362609"},
-  { label: "Amount",           value: "₦5,000,000.00" },
-  { label: "Naration",         value: "Personal withdraw" },
-  { label: "Transaction No.",  value: "56478786768798076677069​8", copyable: true },
-  { label: "Transaction Date", value: "Feb. 10th 2025   4:00 PM" },
-  { label: "Session ID",       value: "436755668758658798686869​373698379", copyable: true },
-];
+function paramText(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
 
 export default function FailedReceiptScreen() {
 
   const { top, bottom } = useSafeAreaInsets();
+  const receiptParams = useLocalSearchParams() as {
+    reference?: string | string[]
+    transaction_reference?: string | string[]
+    amount?: string | string[]
+    payment_status?: string | string[]
+  }
+  const amount = paramText(receiptParams.amount)
+  const txRef = paramText(receiptParams.transaction_reference) || paramText(receiptParams.reference)
+  const status = paramText(receiptParams.payment_status) || "pending"
+  const rows: ReceiptRow[] = [
+    { label: "Amount", value: amount ? displayCurrency(Number(amount)) : "—" },
+    { label: "Type", value: "Wallet deposit" },
+    { label: "Status", value: status },
+    { label: "Reference", value: txRef || "—", copyable: Boolean(txRef) },
+    { label: "Date", value: moment().format("llll") },
+  ]
 
   const headerOpacity    = useSharedValue(0);
   const headerTranslateY = useSharedValue(40);
@@ -88,7 +101,7 @@ export default function FailedReceiptScreen() {
             Unsuccessful Deposit!
           </Text>
           <Text className="text-sm font-mmedium text-white text-center leading-6">
-            Your deposit was unsuccessful due to insufficient airtime. Don’t miss out on your wins credit your wallet early.
+            Your deposit could not be confirmed yet. If Nomba charged you, wait a moment and check Transactions — do not pay again until this reference is successful.
           </Text>
         </Animated.View>
 

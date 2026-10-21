@@ -4,7 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, w
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { images } from "../constants";
-import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const ZOOM_STAGES = [
   { width: 55,  height: 62  },  // small
@@ -36,7 +36,7 @@ export default function Splash() {
   }));
 
   return (
-    <SafeAreaProvider>
+    <>
       <SafeAreaView className='flex-1' edges={['left', 'right']}>
         <ImageBackground source={images.splash} resizeMode="cover" className='flex-1 justify-center'>
           <View className="justify-center items-center">
@@ -49,6 +49,6 @@ export default function Splash() {
         </ImageBackground>
       </SafeAreaView>
       <StatusBar style="light" />
-    </SafeAreaProvider>
+    </>
   );
 }
