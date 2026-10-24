@@ -14,6 +14,7 @@ import { Image } from 'expo-image'
 import { Entypo, Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -244,6 +245,8 @@ const CardScreen = () => {
         text2: 'Please check your input',
       })
     }
+
+    if (!hasEnoughBalance(Number(stake))) return
 
     try {
       setLoading(true)

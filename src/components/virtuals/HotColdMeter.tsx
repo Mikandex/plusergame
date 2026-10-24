@@ -17,7 +17,7 @@ const COPY: Record<Heat, { title: string; detail: string; colors: [string, strin
   hit: { title: 'On the number', detail: 'Exact hit. That’s the only payout.', colors: ['#3ecf78', '#157a3e'] },
   hot: { title: 'Hot', detail: 'Close — but close does not pay.', colors: ['#f0a43a', '#c45b12'] },
   warm: { title: 'Warm', detail: 'In the neighbourhood. Still a miss.', colors: ['#e3a843', '#8a6a20'] },
-  cold: { title: 'Cold', detail: 'A long way from the house number.', colors: ['#4fa3d1', '#1b4a5f'] },
+  cold: { title: 'Cold', detail: 'A long way from the AI number.', colors: ['#4fa3d1', '#1b4a5f'] },
 }
 
 type HotColdMeterProps = {
@@ -39,7 +39,7 @@ export default function HotColdMeter({ guess, house, max }: HotColdMeterProps) {
         <Text style={styles.badgeText}>{copy.title}</Text>
       </LinearGradient>
       <Text style={styles.detail}>
-        You picked {guess}. House was {house}
+        You picked {guess}. AI drew {house}
         {gap ? ` · ${gap} away` : ''}. {copy.detail}
       </Text>
       <View style={styles.track}>
@@ -54,7 +54,7 @@ export default function HotColdMeter({ guess, house, max }: HotColdMeterProps) {
       </View>
       <View style={styles.legend}>
         <Text style={styles.legendGuess}>Your pick</Text>
-        <Text style={styles.legendHouse}>House</Text>
+        <Text style={styles.legendHouse}>AI</Text>
       </View>
     </View>
   )

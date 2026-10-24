@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import z from 'zod'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
@@ -133,6 +134,8 @@ export default function CoinScreen() {
         text1: parsed.error.issues[0].message,
       })
     }
+
+    if (!hasEnoughBalance(Number(stake))) return
 
     try {
       setLoading(true)

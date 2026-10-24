@@ -11,6 +11,20 @@ export type VirtualGame = {
 
 export const VIRTUAL_GAMES: VirtualGame[] = [
   {
+    id: '10',
+    title: 'Crash',
+    description: 'Ride the rocket. Cash out before it blows.',
+    image: images.crash,
+    route: '/(protected)/(routes)/GameDetails?gameKey=crash',
+  },
+  {
+    id: '11',
+    title: 'Mines',
+    description: 'Find the gems. Dodge the mines. Cash out any time.',
+    image: images.mines,
+    route: '/(protected)/(routes)/GameDetails?gameKey=mines',
+  },
+  {
     id: '1',
     title: 'Dice',
     description: 'Bet even, high, or an exact total — two dice.',
@@ -41,7 +55,7 @@ export const VIRTUAL_GAMES: VirtualGame[] = [
   {
     id: '5',
     title: 'Hot Cold',
-    description: 'Guess the house number. Hot is close. Only exact pays.',
+    description: 'Guess the AI number. Hot is close. Only exact pays.',
     image: images.hotCold,
     route: '/(protected)/(routes)/GameDetails?gameKey=hotcold',
   },
@@ -62,7 +76,7 @@ export const VIRTUAL_GAMES: VirtualGame[] = [
   {
     id: '8',
     title: 'RPS Bet',
-    description: 'Throw rock, paper, or scissors. House throws back.',
+    description: 'Throw rock, paper, or scissors. The AI throws back.',
     image: images.betting,
     route: '/(protected)/(routes)/GameDetails?gameKey=rpsbet',
   },

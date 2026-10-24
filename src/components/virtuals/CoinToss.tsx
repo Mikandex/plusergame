@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { Image, StyleSheet, View } from 'react-native'
-import { Asset } from 'expo-asset'
+import { StyleSheet, View } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
-import { images } from '@/constants'
+import { COIN_HEADS_RGB, COIN_TAILS_RGB, COIN_TEXTURE_SIZE } from '@/constants/coinTextures'
 
 export type CoinFace = 'heads' | 'tails' | 'edge'
 
@@ -84,29 +83,31 @@ function reedTexture() {
   return tex
 }
 
-async function textureFromModule(mod: number) {
-  const asset = Asset.fromModule(mod)
-  await asset.downloadAsync()
-  const uri = asset.localUri || asset.uri
-  const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-    Image.getSize(uri, (width, height) => resolve({ width, height }), reject)
-  })
-  const texture = new THREE.Texture()
-  texture.image = { data: asset, width: size.width, height: size.height }
-  ;(texture as unknown as { isDataTexture: boolean }).isDataTexture = true
-  texture.needsUpdate = true
-  texture.flipY = true
-  if ('colorSpace' in texture) {
-    texture.colorSpace = THREE.SRGBColorSpace
+function faceTexture(base64: string) {
+  const rgb = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+  const pixels = COIN_TEXTURE_SIZE * COIN_TEXTURE_SIZE
+  const data = new Uint8Array(pixels * 4)
+  for (let i = 0; i < pixels; i += 1) {
+    data[i * 4] = rgb[i * 3]
+    data[i * 4 + 1] = rgb[i * 3 + 1]
+    data[i * 4 + 2] = rgb[i * 3 + 2]
+    data[i * 4 + 3] = 255
   }
-  return texture
+  const tex = new THREE.DataTexture(data, COIN_TEXTURE_SIZE, COIN_TEXTURE_SIZE)
+  tex.generateMipmaps = false
+  tex.minFilter = THREE.LinearFilter
+  tex.magFilter = THREE.LinearFilter
+  if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace
+  tex.needsUpdate = true
+  return tex
 }
 
-function goldFace() {
+function coinFace(map: THREE.Texture) {
   return new THREE.MeshStandardMaterial({
-    color: 0xc9a227,
-    metalness: 0.72,
-    roughness: 0.28,
+    map,
+    color: 0xffffff,
+    metalness: 0.45,
+    roughness: 0.4,
   })
 }
 
@@ -187,8 +188,10 @@ export default function CoinToss({ face, tossing, reduceMotion = false }: CoinTo
       metalness: 0.85,
       roughness: 0.22,
     })
-    const headsMat = goldFace()
-    const tailsMat = goldFace()
+    const headsMap = faceTexture(COIN_HEADS_RGB)
+    const tailsMap = faceTexture(COIN_TAILS_RGB)
+    const headsMat = coinFace(headsMap)
+    const tailsMat = coinFace(tailsMap)
 
     const geometry = new THREE.CylinderGeometry(RADIUS, RADIUS, 0.11, 64)
     const mesh = new THREE.Mesh(geometry, [side, headsMat, tailsMat])
@@ -201,7 +204,7 @@ export default function CoinToss({ face, tossing, reduceMotion = false }: CoinTo
       scene,
       camera,
       mesh,
-      textures: [reed],
+      textures: [reed, headsMap, tailsMap],
       omega: new THREE.Vector3(),
       landing: false,
       from: new THREE.Quaternion(),
@@ -272,26 +275,6 @@ export default function CoinToss({ face, tossing, reduceMotion = false }: CoinTo
 
     world.raf = requestAnimationFrame(tick)
 
-    void (async () => {
-      try {
-        const [headsMap, tailsMap] = await Promise.all([
-          textureFromModule(images.coin as unknown as number),
-          textureFromModule(images.coinTail as unknown as number),
-        ])
-        if (world.disposed) {
-          headsMap.dispose()
-          tailsMap.dispose()
-          return
-        }
-        headsMat.map = headsMap
-        headsMat.needsUpdate = true
-        tailsMat.map = tailsMap
-        tailsMat.needsUpdate = true
-        world.textures.push(headsMap, tailsMap)
-      } catch {
-        // gold faces already render
-      }
-    })()
   }
 
   return (

@@ -1,9 +1,15 @@
-import { View, StyleSheet, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Image, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { images } from '@/constants';
 
 const { width } = Dimensions.get('window');
 
-const HomeBanner = () => {
+type HomeBannerProps = {
+  /** Show a Start Now button that takes a guest to Create Account / Log In. */
+  startNow?: boolean;
+};
+
+const HomeBanner = ({ startNow = false }: HomeBannerProps) => {
   return (
     <View style={{ alignItems: 'center' }}>
       <View
@@ -15,6 +21,18 @@ const HomeBanner = () => {
           resizeMode="cover"
           style={styles.image}
         />
+        {startNow ? (
+          <TouchableOpacity
+            testID="start-now-button"
+            accessibilityRole="button"
+            accessibilityLabel="Start Now"
+            activeOpacity={0.85}
+            onPress={() => router.push('/(onboarding)')}
+            style={styles.startNow}
+          >
+            <Text style={styles.startNowText}>Start Now</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -33,5 +51,20 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  startNow: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    backgroundColor: '#D4AF37',
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 9,
+  },
+  startNowText: {
+    color: '#0F1115',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

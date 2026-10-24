@@ -11,6 +11,8 @@ import hotCold from "../../assets/images/hotcold.png";
 import betting from "../../assets/images/betting.png";
 import lottery from "../../assets/images/lottery.png";
 import spinToWin from "../../assets/images/spin-to-win.png";
+import crash from "../../assets/images/crash.png";
+import mines from "../../assets/images/mines.png";
 import box from "../../assets/images/box.png";
 import fruit from "../../assets/images/fruit.png";
 import wallet from "../../assets/images/wallet.png";
@@ -33,6 +35,8 @@ export default {
   card2,
   card3,
   spinToWin,
+  crash,
+  mines,
   card,
   hotCold,
   coin,

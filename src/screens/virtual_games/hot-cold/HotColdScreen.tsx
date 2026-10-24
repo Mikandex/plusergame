@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { z } from 'zod'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
@@ -33,7 +34,7 @@ const REVEAL_MS = 900
 
 const HOTCOLD_RULES = [
   'Pick a range, then one number in that range. Your stake is taken when you reveal.',
-  'The house draws one number from the same range. Only an exact match pays.',
+  'The AI draws one number from the same range. Only an exact match pays.',
   'After the reveal, hot means you were close and cold means you were far. Close does not pay.',
   'Wider range, bigger multiplier: 1–10 pays 10x, 1–20 pays 20x, 1–30 pays 30x. Stake ₦50–₦1,000.',
 ]
@@ -106,6 +107,8 @@ const HotColdScreen = () => {
       })
     }
 
+    if (!hasEnoughBalance(Number(stake))) return
+
     try {
       setLoading(true)
       setShowOverlay(false)
@@ -123,7 +126,7 @@ const HotColdScreen = () => {
       const data = res.data
       const game = data?.game
       if (!game) {
-        throw new Error(data?.message || 'The house number did not come back. Try again.')
+        throw new Error(data?.message || 'The AI number did not come back. Try again.')
       }
 
       const wait = reduceMotion ? 0 : Math.max(0, REVEAL_MS - (Date.now() - started))
@@ -212,7 +215,7 @@ const HotColdScreen = () => {
         />
 
         <Text style={styles.explain}>
-          Guess the house number. Hot is close. Only exact pays.
+          Guess the AI number. Hot is close. Only exact pays.
         </Text>
 
         <View style={styles.rangeRow}>
@@ -281,7 +284,7 @@ const HotColdScreen = () => {
             detail={
               result.isWin
                 ? `+${displayCurrency(Number(result.payout || 0))}`
-                : `House ${result.house}`
+                : `AI ${result.house}`
             }
             reduceMotion={reduceMotion}
           />
@@ -290,7 +293,7 @@ const HotColdScreen = () => {
         <View style={styles.pickBox}>
           <Text style={styles.pickText}>
             {loading
-              ? 'House is drawing…'
+              ? 'AI is drawing…'
               : selectedNumber
                 ? `Calling ${selectedNumber} in ${selectedRange.label}`
                 : `Pick one number from ${selectedRange.label}`}

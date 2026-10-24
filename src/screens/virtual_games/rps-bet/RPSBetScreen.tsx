@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import z from 'zod'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
@@ -88,6 +89,8 @@ const RPSBetScreen = () => {
     if (!parsed.success) {
       return Toast.show({ type: 'info', text1: parsed.error.issues[0].message })
     }
+
+    if (!hasEnoughBalance(Number(stake))) return
 
     try {
       setLoading(true)
@@ -176,7 +179,7 @@ const RPSBetScreen = () => {
       : winner === 'user'
         ? 'You take it'
         : winner === 'ai'
-          ? 'House takes it'
+          ? 'AI takes it'
           : winner === 'draw'
             ? 'Draw · stake back'
             : 'Throw a move. That’s the round.'
@@ -227,7 +230,7 @@ const RPSBetScreen = () => {
           <RoundResultOverlay
             visible={showOverlay}
             isWin={winner === 'user'}
-            title={winner === 'user' ? 'You take it' : winner === 'draw' ? 'Draw' : 'House takes it'}
+            title={winner === 'user' ? 'You take it' : winner === 'draw' ? 'Draw' : 'AI takes it'}
             detail={
               winner === 'user'
                 ? `+${displayCurrency(Number(payout || 0))}`

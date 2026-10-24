@@ -80,7 +80,7 @@ export default function RpsArena({ you, house, clashing, winner, reduceMotion = 
         </Animated.View>
 
         <Animated.View style={[styles.pad, winner === 'ai' && styles.padWin, houseStyle]}>
-          <Text style={styles.label}>HOUSE</Text>
+          <Text style={styles.label}>AI</Text>
           <RpsSign move={clashing ? 'rock' : house} size={92} />
         </Animated.View>
       </View>

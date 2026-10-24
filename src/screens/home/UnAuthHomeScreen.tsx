@@ -20,7 +20,7 @@ const ListHeader = () => {
 
   return (
     <View>
-      <HomeBanner />
+      <HomeBanner startNow />
       <RecentWinnings />
       <View className="flex-row items-center gap-1 my-3">
         <Ionicons name="game-controller" size={16} color="#D4AF37" />

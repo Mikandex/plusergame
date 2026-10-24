@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import z from 'zod'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
@@ -193,6 +194,8 @@ const LotteryScreen = () => {
         text1: parsed.error.issues[0].message,
       })
     }
+
+    if (!hasEnoughBalance(Number(stake))) return
 
     try {
       setLoading(true)

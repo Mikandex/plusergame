@@ -32,7 +32,7 @@ const transactionRemark = [
   { title: 'Rejected', value: 'rejected' }
 ];
 
-export type GameKey = 'coin' | 'dice' | 'hotcold' | 'lottery' | 'luckybox' | 'rpsbet' | 'card' | 'spinwheel' | 'reelstreak';
+export type GameKey = 'coin' | 'dice' | 'hotcold' | 'lottery' | 'luckybox' | 'rpsbet' | 'card' | 'spinwheel' | 'reelstreak' | 'crash' | 'mines';
 
 export type GameDetail = {
   title: string;
@@ -134,6 +134,28 @@ export const GAME_DETAILS: Record<GameKey, GameDetail> = {
     chancesPerPlay: 1,
     rewardSummary: 'Land on a winning segment to collect 2x your stake.',
     description: 'Set your stake and spin the wheel. Each segment carries its own multiplier, so every spin is a new shot at a payout.',
+  },
+  crash: {
+    title: 'Crash',
+    route: 'Crash',
+    image: images.crash,
+    minStake: 50,
+    maxStake: 1000,
+    defaultMultiplier: 'up to 1000x',
+    chancesPerPlay: 1,
+    rewardSummary: 'Set a cash-out point. If the rocket climbs past it, you win your stake times that number.',
+    description: 'The rocket climbs and the multiplier climbs with it, until it crashes. Choose where you cash out before launch: play safe at 1.5x or chase 50x. The higher you aim, the rarer the win.',
+  },
+  mines: {
+    title: 'Mines',
+    route: 'Mines',
+    image: images.mines,
+    minStake: 50,
+    maxStake: 1000,
+    defaultMultiplier: 'up to 1000x',
+    chancesPerPlay: 1,
+    rewardSummary: 'Open gems to grow your multiplier. Cash out any time, before you hit a mine.',
+    description: 'Twenty-five tiles, some hiding mines. Pick how many mines to play with, then open tiles one by one. Every gem raises your payout; one mine ends the round. You decide when to walk away.',
   },
   reelstreak: {
     title: 'Reel Streak',

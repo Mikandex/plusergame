@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import z from 'zod'
 import Toast from 'react-native-toast-message'
+import { hasEnoughBalance } from '@/utils/stakeGuard'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSfx } from '@/hooks/useSfx'
 import getWallet from '@/utils/WalletApi'
@@ -102,6 +103,8 @@ const SpinWheelScreen = () => {
     if (!parsed.success) {
       return Toast.show({ type: 'info', text1: parsed.error.issues[0].message })
     }
+
+    if (!hasEnoughBalance(Number(stake))) return
 
     sfx.flip()
     triggerHaptic('roll')
