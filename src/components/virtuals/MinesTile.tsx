@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, TouchableOpacity, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg'
 
@@ -101,36 +101,43 @@ export default function MinesTile({ state, size, disabled, onPress }: MinesTileP
   const icon = Math.round(size * 0.62)
 
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || !hidden}
-      style={({ pressed }) => [{ width: size, height: size }, pressed && hidden && !disabled && { transform: [{ scale: 0.94 }] }]}
-      accessibilityRole="button"
-      accessibilityLabel={hidden ? 'Hidden tile' : state.startsWith('gem') ? 'Gem' : 'Mine'}
-    >
-      {hidden ? (
-        <View style={[styles.tile, styles.hidden, disabled && styles.idle]}>
-          <View style={styles.shine} />
-        </View>
-      ) : (
-        <Animated.View
-          style={[
-            styles.tile,
-            styles.open,
-            state === 'gem' && styles.gemGlow,
-            state === 'hit' && styles.hit,
-            faded && styles.faded,
-            style,
-          ]}
-        >
-          {state.startsWith('gem') ? <GemIcon size={icon} /> : <MineIcon size={icon} />}
-        </Animated.View>
-      )}
-    </Pressable>
+    <View style={{ width: size, height: size }}>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        onPress={onPress}
+        disabled={disabled || !hidden}
+        style={styles.fill}
+        accessibilityRole="button"
+        accessibilityLabel={hidden ? 'Hidden tile' : state.startsWith('gem') ? 'Gem' : 'Mine'}
+      >
+        {hidden ? (
+          <View style={[styles.tile, styles.hidden, disabled && styles.idle]}>
+            <View style={styles.shine} />
+          </View>
+        ) : (
+          <Animated.View
+            style={[
+              styles.tile,
+              styles.open,
+              state === 'gem' && styles.gemGlow,
+              state === 'hit' && styles.hit,
+              faded && styles.faded,
+              style,
+            ]}
+          >
+            {state.startsWith('gem') ? <GemIcon size={icon} /> : <MineIcon size={icon} />}
+          </Animated.View>
+        )}
+      </TouchableOpacity>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    width: '100%',
+    height: '100%',
+  },
   tile: {
     flex: 1,
     borderRadius: 14,

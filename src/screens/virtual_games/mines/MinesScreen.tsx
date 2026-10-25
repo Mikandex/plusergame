@@ -313,7 +313,7 @@ const MinesScreen = () => {
           </View>
         </View>
 
-        <View style={styles.board}>
+        <View style={[styles.board, { width: tileSize * 5 + gap * 4 + 22 }]}>
           {Array.from({ length: GRID }, (_, i) => (
             <MinesTile
               key={i}
