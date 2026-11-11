@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
 
@@ -279,7 +279,7 @@ export default function CasinoWheel({
     }
   }, [])
 
-  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+  const setupScene = (gl: ExpoWebGLRenderingContext) => {
     if (worldRef.current) {
       worldRef.current.disposed = true
       cancelAnimationFrame(worldRef.current.raf)
@@ -521,9 +521,38 @@ export default function CasinoWheel({
     world.raf = requestAnimationFrame(tick)
   }
 
+
+  const [glFailed, setGlFailed] = useState(false)
+  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    const fail = (error: unknown) => {
+      console.warn('3D view unavailable, showing 2D fallback', error)
+      setGlFailed(true)
+    }
+    try {
+      void Promise.resolve(setupScene(gl)).catch(fail)
+    } catch (error) {
+      fail(error)
+    }
+  }
+
+  // The Spin screen only shows its result once the wheel settles, so the fallback settles too.
+  useEffect(() => {
+    if (!glFailed || !spinning || targetIndex === null) return
+    const timer = setTimeout(() => propsRef.current.onSettled?.(), reduceMotion ? 0 : 900)
+    return () => clearTimeout(timer)
+  }, [glFailed, spinning, targetIndex, reduceMotion])
+
+  const landed = targetIndex !== null ? WHEEL_SEGMENTS[targetIndex] : null
   return (
     <View style={styles.stage}>
-      <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      {glFailed ? (
+        <View style={styles.fallback}>
+          <Text style={styles.fallbackIcon}>🎡</Text>
+          <Text style={styles.fallbackText}>{spinning ? 'Spinning…' : landed ? landed.caption : 'Tap spin'}</Text>
+        </View>
+      ) : (
+        <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      )}
     </View>
   )
 }
@@ -538,5 +567,19 @@ const styles = StyleSheet.create({
   },
   gl: {
     flex: 1,
+  },
+  fallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  fallbackIcon: {
+    fontSize: 96,
+  },
+  fallbackText: {
+    color: '#f0d9a0',
+    fontSize: 26,
+    fontWeight: '800',
   },
 })

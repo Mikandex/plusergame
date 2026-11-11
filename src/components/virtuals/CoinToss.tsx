@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Image, StyleSheet, View } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
+import { images } from '@/constants'
 import { COIN_HEADS_RGB, COIN_TAILS_RGB, COIN_TEXTURE_SIZE } from '@/constants/coinTextures'
 
 export type CoinFace = 'heads' | 'tails' | 'edge'
@@ -148,7 +149,7 @@ export default function CoinToss({ face, tossing, reduceMotion = false }: CoinTo
     }
   }, [])
 
-  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+  const setupScene = (gl: ExpoWebGLRenderingContext) => {
     if (worldRef.current) {
       worldRef.current.disposed = true
       cancelAnimationFrame(worldRef.current.raf)
@@ -277,9 +278,33 @@ export default function CoinToss({ face, tossing, reduceMotion = false }: CoinTo
 
   }
 
+
+  const [glFailed, setGlFailed] = useState(false)
+  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    const fail = (error: unknown) => {
+      console.warn('3D view unavailable, showing 2D fallback', error)
+      setGlFailed(true)
+    }
+    try {
+      void Promise.resolve(setupScene(gl)).catch(fail)
+    } catch (error) {
+      fail(error)
+    }
+  }
+
   return (
     <View style={styles.wrap}>
-      <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      {glFailed ? (
+        <View style={styles.fallback}>
+          <Image
+            source={face === 'tails' ? images.coinTail : images.coin}
+            style={[styles.fallbackCoin, tossing && { opacity: 0.6 }]}
+            resizeMode="contain"
+          />
+        </View>
+      ) : (
+        <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      )}
     </View>
   )
 }
@@ -292,5 +317,14 @@ const styles = StyleSheet.create({
   },
   gl: {
     flex: 1,
+  },
+  fallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackCoin: {
+    width: 150,
+    height: 150,
   },
 })

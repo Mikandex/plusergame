@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl'
 import * as THREE from 'three'
 
@@ -174,7 +174,7 @@ export default function DiceTable({ left, right, rolling, reduceMotion = false }
     }
   }, [])
 
-  const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+  const setupScene = async (gl: ExpoWebGLRenderingContext) => {
     if (worldRef.current) {
       worldRef.current.disposed = true
       cancelAnimationFrame(worldRef.current.raf)
@@ -299,9 +299,31 @@ export default function DiceTable({ left, right, rolling, reduceMotion = false }
     world.raf = requestAnimationFrame(tick)
   }
 
+
+  const [glFailed, setGlFailed] = useState(false)
+  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    const fail = (error: unknown) => {
+      console.warn('3D view unavailable, showing 2D fallback', error)
+      setGlFailed(true)
+    }
+    try {
+      void Promise.resolve(setupScene(gl)).catch(fail)
+    } catch (error) {
+      fail(error)
+    }
+  }
+
+  const DIE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
   return (
     <View style={styles.wrap}>
-      <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      {glFailed ? (
+        <View style={styles.fallback}>
+          <Text style={[styles.fallbackDie, rolling && { opacity: 0.5 }]}>{DIE_FACES[clampFace(left) - 1]}</Text>
+          <Text style={[styles.fallbackDie, rolling && { opacity: 0.5 }]}>{DIE_FACES[clampFace(right) - 1]}</Text>
+        </View>
+      ) : (
+        <GLView style={styles.gl} onContextCreate={onContextCreate} />
+      )}
     </View>
   )
 }
@@ -315,5 +337,16 @@ const styles = StyleSheet.create({
   },
   gl: {
     flex: 1,
+  },
+  fallback: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  fallbackDie: {
+    fontSize: 96,
+    color: '#f8f0dc',
   },
 })
