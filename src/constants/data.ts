@@ -170,18 +170,19 @@ export const GAME_DETAILS: Record<GameKey, GameDetail> = {
   },
 };
 
-// TODO: replace with real production URLs before release
+// Only real, confirmed contacts go here. An empty value hides that item in Help and Support,
+// so the app never shows a dead link or a dummy number. FAQ and Helpful Tips are in-app screens;
+// set tutorialVideoUrl to add a "Watch the tutorial video" button to Helpful Tips.
 export const SUPPORT_LINKS = {
-  faqUrl: 'https://plusergame.com/faq',
-  tutorialVideoUrl: 'https://plusergame.com/tutorial',
-  supportPhone: '+2348000000000',
-  supportEmail: 'support@plusergame.com',
+  tutorialVideoUrl: '',
+  supportPhone: '',
+  supportEmail: '',
   social: {
-    facebook: 'https://facebook.com/plusergame',
-    instagram: 'https://instagram.com/plusergame',
-    x: 'https://x.com/plusergame',
-    linkedin: 'https://linkedin.com/company/plusergame',
-    tiktok: 'https://tiktok.com/@plusergame',
+    facebook: '',
+    instagram: '',
+    x: '',
+    linkedin: '',
+    tiktok: '',
   },
 };
 

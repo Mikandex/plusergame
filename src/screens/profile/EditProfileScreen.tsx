@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import moment from 'moment';
-import React, {  useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   KeyboardAvoidingView,
@@ -44,7 +44,26 @@ export default function EditProfileScreen() {
     fullName: userProfile?.fullName || "",
     email: userProfile?.email || "",
     gender: userProfile?.gender || '',
+    nickname: userProfile?.nickname || '',
   });
+  // Login does not return the nickname, so read the saved one when the screen opens.
+  const [savedNickname, setSavedNickname] = useState(userProfile?.nickname || '');
+
+  useEffect(() => {
+    let cancelled = false
+    axiosClient
+      .get('/profile/')
+      .then((res) => {
+        const nickname = res.data?.user?.nickname || ''
+        if (cancelled) return
+        setSavedNickname(nickname)
+        setForm((prev) => (prev.nickname ? prev : { ...prev, nickname }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, []);
 
   const [emailError, setEmailError] = useState("");
 
@@ -61,14 +80,16 @@ export default function EditProfileScreen() {
     fullName: userProfile.fullName,
     dateOfBirth: userProfile.dateOfBirth,
     gender: userProfile.gender,
-    email: userProfile.email || ""
+    email: userProfile.email || "",
+    nickname: savedNickname
   }
 
   const newData = {
     fullName: form.fullName,
     dateOfBirth: birthFormatted,
     gender: form.gender,
-    email: form.email.trim()
+    email: form.email.trim(),
+    nickname: form.nickname.trim()
   }
 
   const hasChanges = () => {
@@ -135,7 +156,9 @@ export default function EditProfileScreen() {
         full_name: form.fullName,
         date_of_birth: birthFormatted,
         gender: form.gender,
-        ...(trimmedEmail && { email: trimmedEmail })
+        ...(trimmedEmail && { email: trimmedEmail }),
+        // only when changed, so saving other fields never depends on nicknames
+        ...(form.nickname.trim() !== savedNickname && { nickname: form.nickname.trim() })
       }
 
       console.log(data)
@@ -147,6 +170,7 @@ export default function EditProfileScreen() {
         dateOfBirth: result.data.user.dateOfBirth || "",
         gender: result.data.user.gender || "",
         email: result.data.user.email || trimmedEmail,
+        nickname: result.data.user.nickname ?? form.nickname.trim(),
       }
 
       console.log(result.data)
@@ -331,13 +355,15 @@ export default function EditProfileScreen() {
                 <View className="bg-charcoal-light rounded-3xl p-6 mb-4">
 
                     <FormField title="Change Name" value={form.fullName} placeholder="Enter here" handleChangeText={(e: any) => setForm({ ...form, fullName: e })} />
+                    <FormField title="Nickname" value={form.nickname} placeholder="Enter nickname (optional)" autoCapitalize="none" autoCorrect={false} maxLength={20} handleChangeText={(e: any) => setForm({ ...form, nickname: e })} otherStyles="mt-4"/>
                     <FormField title="Enter Email" value={form.email} placeholder="Enter here" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} handleChangeText={(e: any) => { setForm({ ...form, email: e }); if (emailError) setEmailError("") }} otherStyles="mt-4"/>
                     {!!emailError && <Text className='text-red text-sm font-mregular mt-1'>{emailError}</Text>}
                     <Picker title='Select gender' value={form.gender} placeholder="Select gender" handleChangeText={(e: any) => setForm({ ...form, gender: e.value })} data={data.gender}/>
                     <View className={`space-y-2 mt-4`}>
                       <Text className={`text-base font-mregular pb-2 text-white`}>Date of Birth</Text>
-                      <TouchableOpacity activeOpacity={0.8} onPress={() => setOpen(true)} className={`bg-gray flex-1 border w-full h-[46px] px-4 rounded-lg items-center flex-row gap-1`}>
-                        <Text className='font-mregular text-charcoal capitalize' numberOfLines={1}>{hasPickedDate ? date.toISOString().split('T')[0] : 'select'}</Text>
+                      <TouchableOpacity activeOpacity={0.8} onPress={() => setOpen(true)} className={`bg-gray border border-gray w-full h-[46px] px-4 rounded-lg items-center flex-row justify-between gap-1`}>
+                        <Text className='font-mregular text-charcoal capitalize' numberOfLines={1}>{hasPickedDate ? date.toISOString().split('T')[0] : 'Select date of birth'}</Text>
+                        <Ionicons name="calendar-outline" size={20} color="#0F1115" />
                       </TouchableOpacity>
                     </View>
                     <CustomButton title="Save changes" handlePress={handleContinue} containerStyles="w-[70%] rounded-lg mt-7 mx-auto" textStyles='text-white'/>

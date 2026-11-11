@@ -1,6 +1,4 @@
 import { axiosClient } from '@/globalApi';
-import { useAuthStore } from '@/store/AuthStore';
-import { useProfileStore } from '@/store/ProfileStore';
 import displayCurrency from '@/utils/displayCurrency';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused } from 'expo-router';
@@ -27,17 +25,11 @@ const SPARKLE_ANGLES = [20, 80, 140, 200, 260, 320].map((deg) => (deg * Math.PI)
 type Winner = {
   id: string;
   name: string;
-  phone: string;
+  game: string;
   bet: string;
   won: string;
   payout: number;
 };
-
-function maskPhone(raw: string) {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length < 7) return raw || '';
-  return `+${digits.slice(0, 6)}****`;
-}
 
 function WinnerRow({ item }: { item: Winner }) {
   const isBigWin = item.payout >= 5000;
@@ -54,7 +46,7 @@ function WinnerRow({ item }: { item: Winner }) {
           </Text>
           {isBigWin ? <Text style={styles.cup}>🏆</Text> : null}
         </View>
-        {item.phone ? <Text style={styles.phone}>{item.phone}</Text> : null}
+        {item.game ? <Text style={styles.phone}>{item.game}</Text> : null}
       </View>
       <View style={styles.amounts}>
         <Text style={styles.bet}>Bet Placed: {item.bet}</Text>
@@ -193,8 +185,6 @@ export default function RecentWinnings({ compact = false, paused = false, refres
   const [loading, setLoading] = useState(true);
   const [reduceMotion, setReduceMotion] = useState(false);
   const isFocused = useIsFocused();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const userProfile = useProfileStore((state) => state.userProfile);
   const shouldAnimate = isFocused && !paused && winners.length > 1;
 
   useEffect(() => {
@@ -207,35 +197,28 @@ export default function RecentWinnings({ compact = false, paused = false, refres
     }
   }, [])
 
+  // Real wins from all players, names already masked by the server. Public, so guests see it too.
   const loadWinnings = useCallback(async () => {
-    if (!isAuthenticated) {
-      setWinners([]);
-      setLoading(false);
-      return;
-    }
-
     try {
-      const result = await axiosClient.get('/virtual/history?limit=20&page=1');
-      const histories = result.data.histories || [];
-      const name = userProfile.fullName?.trim() || 'You';
-      const phone = maskPhone(userProfile.phoneNumber || '');
-      const mapped: Winner[] = histories
-        .filter((item: { is_win?: boolean }) => item.is_win)
-        .map((item: { id: string; stake: number; payout: number }) => ({
+      const result = await axiosClient.get('/virtual/recent-wins?limit=15');
+      const wins = Array.isArray(result.data?.wins) ? result.data.wins : [];
+      const mapped: Winner[] = wins.map(
+        (item: { id: string; name: string; game: string; stake: number; payout: number; multiplier?: string }) => ({
           id: item.id,
-          name,
-          phone,
+          name: item.name,
+          game: item.multiplier ? `${item.game} · ${item.multiplier}` : item.game,
           bet: displayCurrency(Number(item.stake)),
           won: displayCurrency(Number(item.payout)),
           payout: Number(item.payout) || 0,
-        }));
+        }),
+      );
       setWinners(mapped);
     } catch {
       setWinners([]);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, userProfile.fullName, userProfile.phoneNumber]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -339,14 +322,8 @@ export default function RecentWinnings({ compact = false, paused = false, refres
           </View>
         ) : winners.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>
-              {isAuthenticated ? 'No wins yet' : 'Real results only'}
-            </Text>
-            <Text style={styles.emptyCopy}>
-              {isAuthenticated
-                ? 'Play a virtual game. Wins are paid to your wallet and listed here.'
-                : 'Log in to play. Stakes debit your wallet — this list is not a promo feed.'}
-            </Text>
+            <Text style={styles.emptyTitle}>No wins yet</Text>
+            <Text style={styles.emptyCopy}>Real wins from real rounds are listed here. Play a game to be the first.</Text>
           </View>
         ) : (
           <>

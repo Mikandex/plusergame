@@ -10,6 +10,7 @@ interface UserProfile {
   gender:  string;
   dateOfBirth: string;
   isEmailVerified: boolean;
+  nickname?: string;
 }
 
 interface ProfileStore {
