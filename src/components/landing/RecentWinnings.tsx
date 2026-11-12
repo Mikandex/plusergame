@@ -1,6 +1,7 @@
 import { axiosClient } from '@/globalApi';
 import displayCurrency from '@/utils/displayCurrency';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -26,6 +27,7 @@ type Winner = {
   id: string;
   name: string;
   game: string;
+  avatar?: string;
   bet: string;
   won: string;
   payout: number;
@@ -37,7 +39,16 @@ function WinnerRow({ item }: { item: Winner }) {
   return (
     <View style={styles.row}>
       <View style={[styles.avatar, isBigWin && styles.avatarGold]}>
-        <FontAwesome5 name="user-alt" size={13} color={isBigWin ? '#D4AF37' : '#9A2121'} />
+        {item.avatar ? (
+          <ExpoImage
+            source={{ uri: `${process.env.EXPO_PUBLIC_IMAGE_URI}${item.avatar}` }}
+            cachePolicy="disk"
+            contentFit="cover"
+            style={{ width: 36, height: 36, borderRadius: 18 }}
+          />
+        ) : (
+          <FontAwesome5 name="user-alt" size={13} color={isBigWin ? '#D4AF37' : '#9A2121'} />
+        )}
       </View>
       <View style={styles.meta}>
         <View style={styles.nameRow}>
@@ -203,9 +214,10 @@ export default function RecentWinnings({ compact = false, paused = false, refres
       const result = await axiosClient.get('/virtual/recent-wins?limit=15');
       const wins = Array.isArray(result.data?.wins) ? result.data.wins : [];
       const mapped: Winner[] = wins.map(
-        (item: { id: string; name: string; game: string; stake: number; payout: number; multiplier?: string }) => ({
+        (item: { id: string; name: string; game: string; avatar?: string; stake: number; payout: number; multiplier?: string }) => ({
           id: item.id,
           name: item.name,
+          avatar: item.avatar || undefined,
           game: item.multiplier ? `${item.game} · ${item.multiplier}` : item.game,
           bet: displayCurrency(Number(item.stake)),
           won: displayCurrency(Number(item.payout)),

@@ -22,7 +22,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.loxfordnavoplus.plusergame",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",

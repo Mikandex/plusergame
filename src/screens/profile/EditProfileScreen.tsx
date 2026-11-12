@@ -342,7 +342,7 @@ export default function EditProfileScreen() {
                             className='w-full h-full rounded-full'
                           />
                         ) : (
-                          <ExpoImage source={{ uri: `${process.env.EXPO_PUBLIC_IMAGE_URI}${userProfile?.profilePicture}` }} placeholder={{ blurhash }} cachePolicy="disk" contentFit="cover" className='w-full h-full rounded-full overflow-hidden'/>
+                          <ExpoImage source={{ uri: `${process.env.EXPO_PUBLIC_IMAGE_URI}${userProfile?.profilePicture}` }} placeholder={{ blurhash }} cachePolicy="disk" contentFit="cover" style={{ width: '100%', height: '100%', borderRadius: 999 }}/>
                         )}
                         <TouchableOpacity activeOpacity={0.9} className='absolute -right-1 bottom-2 z-50' onPress={pickImage}>
                             <View className={`flex items-center justify-center size-10 rounded-full bg-yellow`}>
